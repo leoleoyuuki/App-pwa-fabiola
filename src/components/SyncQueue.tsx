@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../utils/db';
 import type { InspectionData, HistoryItem } from '../utils/db';
 import { syncInspection } from '../utils/syncService';
@@ -40,9 +40,12 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Synchronous ref to prevent double-execution from StrictMode double-rendering
+  const isSyncingRef = useRef(false);
+
   // Auto-sync when online if queue has items
   useEffect(() => {
-    if (isOnline && queue.length > 0 && !isSyncing) {
+    if (isOnline && queue.length > 0 && !isSyncing && !isSyncingRef.current) {
       // Prompt user or start auto-sync
       // For safety, we can auto-trigger it or let them tap. Let's do auto-sync for a seamless UX!
       handleSyncAll();
@@ -50,12 +53,13 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
   }, [isOnline, queue.length]);
 
   const handleSyncAll = async () => {
-    if (queue.length === 0 || isSyncing) return;
+    if (queue.length === 0 || isSyncingRef.current) return;
     if (!webhookUrl || !webhookUrl.startsWith('http')) {
       setErrorMsg('Configure uma URL de Webhook válida nas configurações antes de sincronizar.');
       return;
     }
 
+    isSyncingRef.current = true;
     setIsSyncing(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -83,6 +87,7 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
     }
 
     setIsSyncing(false);
+    isSyncingRef.current = false;
     setCurrentSyncId(null);
     setSyncProgress(null);
     
