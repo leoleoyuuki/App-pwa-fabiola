@@ -11,6 +11,10 @@ function App() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
+  // Loading states
+  const [isAppLoading, setIsAppLoading] = useState(true);
+  const [fadeClass, setFadeClass] = useState('');
+  
   // Custom Webhook URL saved in localStorage
   const [webhookUrl, setWebhookUrl] = useState(() => {
     return localStorage.getItem('fabiola_webhook_url') || '';
@@ -47,9 +51,18 @@ function App() {
     }
   };
 
-  // Initial load
+  // Initial load with brand exposure duration
   useEffect(() => {
-    refreshData();
+    const init = async () => {
+      await refreshData();
+      setTimeout(() => {
+        setFadeClass('fade-out');
+        setTimeout(() => {
+          setIsAppLoading(false);
+        }, 500); // Wait for CSS transition opacity to complete
+      }, 1200); // 1.2s of elegant brand logo exposure
+    };
+    init();
   }, []);
 
   return (
@@ -62,6 +75,17 @@ function App() {
         paddingBottom: '105px' // Leave space for the floating bottom navbar
       }}
     >
+      {/* Brand Loading Overlay */}
+      {isAppLoading && (
+        <div className={`loading-screen ${fadeClass}`}>
+          <div className="loading-content">
+            <img src="/logo192.png" className="loading-logo" alt="Logo" />
+            <h2 className="loading-title">Fabiola</h2>
+            <p className="loading-subtitle">Arquiteta & Designer</p>
+            <div className="loading-spinner"></div>
+          </div>
+        </div>
+      )}
       {/* Elegante Top Bar */}
       <header 
         style={{
