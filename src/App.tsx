@@ -59,7 +59,7 @@ function App() {
         flexDirection: 'column',
         minHeight: '100vh',
         backgroundColor: 'var(--bg-primary)',
-        paddingBottom: '80px' // Leave space for the fixed bottom navbar
+        paddingBottom: '105px' // Leave space for the floating bottom navbar
       }}
     >
       {/* Elegante Top Bar */}
@@ -124,15 +124,14 @@ function App() {
         className="glass-panel"
         style={{
           position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '70px',
+          bottom: '16px',
+          left: '16px',
+          right: '16px',
+          height: '66px',
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          borderTop: '1px solid var(--border-color)',
-          paddingBottom: 'safe-area-inset-bottom', // iOS notch spacing
+          borderRadius: 'var(--radius-lg)',
           zIndex: 500
         }}
       >

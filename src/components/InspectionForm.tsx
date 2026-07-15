@@ -357,14 +357,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
               {photos.map((photo) => (
                 <div 
                   key={photo.id} 
-                  style={{ 
-                    position: 'relative', 
-                    aspectRatio: '1', 
-                    borderRadius: 'var(--radius-sm)', 
-                    overflow: 'hidden',
-                    border: '1px solid var(--border-color)',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
-                  }}
+                  className="photo-grid-item"
                 >
                   <img 
                     src={photo.thumbnail} 

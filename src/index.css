@@ -1,29 +1,30 @@
 :root {
-  /* Elegant Color Palette */
-  --bg-primary: #FAF9F6;      /* Off-white / Sand background */
-  --bg-card: #FFFFFF;         /* Pure white cards */
-  --text-primary: #1F2022;    /* Deep charcoal */
-  --text-secondary: #6D6F72;  /* Soft warm grey */
-  --accent-gold: #C4A484;     /* Muted bronze / gold */
-  --accent-gold-hover: #B08F6F;
-  --accent-gold-light: #F4EFEA;
+  /* Quiet Luxury Architectural Palette */
+  --bg-primary: #FBFBFA;      /* Porcelain off-white */
+  --bg-card: #FFFFFF;         /* Pure white */
+  --text-primary: #181817;    /* Deep graphite */
+  --text-secondary: #797975;  /* Muted limestone grey */
+  --accent-gold: #BFAA8F;     /* Sandstone gold / bronze */
+  --accent-gold-hover: #A59075;
+  --accent-gold-light: #F7F5F2;
   --accent-sage: #8F9779;     /* Sage green for success */
-  --accent-sage-light: #EBF0EA;
-  --accent-rust: #B87878;     /* Rust/rose for danger */
-  --accent-rust-light: #F9EAEA;
-  --border-color: #E6E1DA;    /* Light warm grey borders */
+  --accent-sage-light: #EFF2EC;
+  --accent-rust: #B58484;     /* Rust/rose for errors/delete */
+  --accent-rust-light: #FAF2F2;
+  --border-color: #EFEFEA;    /* Extra fine border */
   
   /* Typography */
   --font-serif: 'Playfair Display', Georgia, serif;
   --font-sans: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   
-  /* Layout */
-  --radius-sm: 4px;
+  /* Layout & Spacing */
+  --radius-xs: 2px;
+  --radius-sm: 4px;           /* Sharp architectural corners */
   --radius-md: 8px;
-  --radius-lg: 16px;
-  --transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  --shadow-subtle: 0 4px 20px rgba(28, 27, 26, 0.03);
-  --shadow-hover: 0 10px 30px rgba(28, 27, 26, 0.06);
+  --radius-lg: 20px;          /* Floating glass elements */
+  --transition-smooth: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-subtle: 0 4px 30px rgba(24, 24, 23, 0.02);
+  --shadow-hover: 0 12px 40px rgba(24, 24, 23, 0.05);
 }
 
 * {
@@ -37,7 +38,7 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -52,18 +53,19 @@ body {
 /* Typography styles */
 h1, h2, h3, h4 {
   font-family: var(--font-serif);
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: -0.01em;
+  color: var(--text-primary);
 }
 
 h1 {
-  font-size: 2.2rem;
-  line-height: 1.2;
+  font-size: 2.1rem;
+  line-height: 1.25;
 }
 
 h2 {
-  font-size: 1.5rem;
-  line-height: 1.3;
+  font-size: 1.45rem;
+  line-height: 1.35;
 }
 
 p {
@@ -72,7 +74,7 @@ p {
   font-size: 0.95rem;
 }
 
-/* Button styles */
+/* Button styles (Minimal Outline to Solid transition) */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -81,12 +83,12 @@ p {
   padding: 12px 24px;
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   cursor: pointer;
-  transition: var(--transition);
+  transition: var(--transition-smooth);
   border: 1px solid transparent;
   outline: none;
 }
@@ -99,6 +101,7 @@ p {
 .btn-primary:hover:not(:disabled),
 .btn-primary:active:not(:disabled) {
   background-color: var(--accent-gold);
+  color: var(--text-primary);
 }
 
 .btn-secondary {
@@ -113,18 +116,18 @@ p {
 }
 
 .btn-gold {
-  background-color: var(--accent-gold-light);
+  background-color: transparent;
   color: var(--accent-gold-hover);
   border: 1px solid var(--accent-gold);
 }
 
 .btn-gold:hover:not(:disabled) {
   background-color: var(--accent-gold);
-  color: var(--bg-primary);
+  color: var(--bg-card);
 }
 
 .btn-danger {
-  background-color: var(--accent-rust-light);
+  background-color: transparent;
   color: var(--accent-rust);
   border: 1px solid var(--accent-rust);
 }
@@ -135,55 +138,61 @@ p {
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
-/* Form controls */
+/* Minimal Slate Form controls (Border Bottom Only) */
 .form-group {
   margin-bottom: 24px;
 }
 
 .form-label {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   font-weight: 500;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: var(--text-secondary);
 }
 
 .form-control {
   width: 100%;
-  padding: 14px 16px;
+  padding: 12px 0;
   font-family: var(--font-sans);
   font-size: 1rem;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  background-color: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0;
   color: var(--text-primary);
-  transition: var(--transition);
+  transition: var(--transition-smooth);
 }
 
 .form-control:focus {
   outline: none;
-  border-color: var(--accent-gold);
-  box-shadow: 0 0 0 3px rgba(196, 164, 132, 0.15);
+  border-bottom-color: var(--accent-gold);
+}
+
+/* Fix for Select arrows */
+select.form-control {
+  padding-right: 24px;
 }
 
 .form-control::placeholder {
-  color: #B4B6B8;
+  color: #C0C0BC;
+  font-weight: 300;
 }
 
-/* Card components */
+/* Card components - sharp, thin border, subtle shadow */
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 24px;
+  border-radius: var(--radius-sm);
+  padding: 28px;
   box-shadow: var(--shadow-subtle);
-  transition: var(--transition);
+  transition: var(--transition-smooth);
 }
 
 .card:hover {
@@ -192,20 +201,27 @@ p {
 
 /* Animation utilities */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { 
+    opacity: 0; 
+    transform: translateY(8px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
 }
 
 .fade-in {
-  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Glassmorphism panel */
+/* Glassmorphism Floating Panel */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(251, 251, 250, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(239, 239, 234, 0.5);
+  box-shadow: 0 8px 32px rgba(24, 24, 23, 0.04);
 }
 
 /* Responsive grid */
@@ -219,17 +235,32 @@ p {
   .grid-cols-2 { grid-template-columns: 1fr; }
 }
 
-/* custom scrollbar */
+/* Photo Thumbnail Grid Styles */
+.photo-grid-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  transition: var(--transition-smooth);
+}
+
+.photo-grid-item:hover {
+  transform: scale(1.02);
+  border-color: var(--accent-gold);
+}
+
+/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: var(--bg-primary);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent-gold);
