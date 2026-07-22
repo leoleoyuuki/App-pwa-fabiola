@@ -35,26 +35,48 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Webhook mock receiver
-app.post('/webhook', upload.array('photos'), (req, res) => {
+app.post('/webhook', upload.fields([
+  { name: 'photosImovel', maxCount: 10 },
+  { name: 'photosMedidor', maxCount: 10 }
+]), (req, res) => {
   console.log('\n=========================================');
-  console.log('📬 NOVO RELATÓRIO DE INSPEÇÃO RECEBIDO!');
+  console.log('📬 NOVO LAUDO DE CONSUMO RECEBIDO!');
   console.log('=========================================');
   console.log('📋 DADOS DO RELATÓRIO:');
   console.log(`   ID: ${req.body.id}`);
   console.log(`   Data de Criação: ${req.body.createdAt}`);
-  console.log(`   Cliente/Projeto: ${req.body.clientName}`);
-  console.log(`   Endereço: ${req.body.projectAddress || 'Não especificado'}`);
-  console.log(`   Responsável: ${req.body.inspectorName || 'Não especificado'}`);
-  console.log(`   Estágio: ${req.body.stage || 'Não especificado'}`);
-  console.log(`   Notas: ${req.body.notes || 'Sem observações'}`);
+  console.log(`   Nome do Autor: ${req.body.nomeAutor || 'Não especificado'}`);
+  console.log(`   Número do Processo: ${req.body.numeroProcesso || 'Não especificado'}`);
+  console.log(`   Réu / Concessionária: ${req.body.reuConcessionaria || 'Não especificado'}`);
+  console.log(`   Tipo de Ação: ${req.body.tipoAcao || 'Não especificado'}`);
+  console.log(`   Data da Vistoria: ${req.body.dataVistoria || 'Não especificado'}`);
+  console.log(`   Nº da Vistoria: ${req.body.numeroVistoria || 'Não especificado'}`);
+  console.log(`   Período: ${req.body.periodoVistoria || 'Não especificado'}`);
+  console.log(`   Número do Medidor: ${req.body.numeroMedidor || 'Não especificado'}`);
+  console.log(`   Checklist: ${req.body.checklist || 'Nenhum item selecionado'}`);
+  console.log(`   Observações Finais: ${req.body.observacoesFinais || 'Sem observações'}`);
   
-  if (req.files && req.files.length > 0) {
-    const filesArray = req.files;
+  const filesImovel = req.files && req.files['photosImovel'] ? req.files['photosImovel'] : [];
+  const filesMedidor = req.files && req.files['photosMedidor'] ? req.files['photosMedidor'] : [];
+  
+  if (filesImovel.length > 0 || filesMedidor.length > 0) {
     console.log('\n📷 IMAGENS EM ALTA RESOLUÇÃO SALVAS:');
-    filesArray.forEach((file, index) => {
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-      console.log(`   [Foto ${index + 1}] ${file.originalname} (${sizeMB} MB) -> salva em: uploads/${file.filename}`);
-    });
+    
+    if (filesImovel.length > 0) {
+      console.log(`   [Fotos do Imóvel - ${filesImovel.length} arquivo(s)]:`);
+      filesImovel.forEach((file, index) => {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        console.log(`      (${index + 1}) ${file.originalname} (${sizeMB} MB) -> uploads/${file.filename}`);
+      });
+    }
+    
+    if (filesMedidor.length > 0) {
+      console.log(`   [Fotos do Medidor - ${filesMedidor.length} arquivo(s)]:`);
+      filesMedidor.forEach((file, index) => {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        console.log(`      (${index + 1}) ${file.originalname} (${sizeMB} MB) -> uploads/${file.filename}`);
+      });
+    }
   } else {
     console.log('\n📷 Nenhuma imagem recebida.');
   }
@@ -62,7 +84,7 @@ app.post('/webhook', upload.array('photos'), (req, res) => {
 
   res.status(200).json({ 
     success: true, 
-    message: 'Relatório recebido com sucesso no servidor local!' 
+    message: 'Laudo de consumo recebido com sucesso no servidor local!' 
   });
 });
 

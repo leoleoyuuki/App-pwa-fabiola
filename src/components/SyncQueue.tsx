@@ -81,7 +81,7 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
         
         refreshData();
       } catch (err: any) {
-        setErrorMsg(`Falha ao enviar "${inspection.clientName}": ${err.message || err}`);
+        setErrorMsg(`Falha ao enviar "${inspection.nomeAutor}": ${err.message || err}`);
         break; // Stop sync queue on error
       }
     }
@@ -187,7 +187,7 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
               <Loader2 size={16} className="spin" style={{ color: 'var(--accent-gold)' }} />
               <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>
-                Enviando relatório: {queue.find(item => item.id === currentSyncId)?.clientName}...
+                Enviando relatório: {queue.find(item => item.id === currentSyncId)?.nomeAutor}...
               </span>
             </div>
             
@@ -284,20 +284,20 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
             <div key={item.id} className="card" style={{ padding: '16px', position: 'relative' }}>
               <div style={{ paddingRight: '40px' }}>
                 <h4 style={{ fontSize: '1.1rem', fontFamily: 'var(--font-serif)', marginBottom: '4px' }}>
-                  {item.clientName || 'Cliente sem nome'}
+                  {item.nomeAutor || 'Autor sem nome'}
                 </h4>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  Local: {item.projectAddress || 'Não especificado'}
+                  Processo: {item.numeroProcesso || 'Não especificado'}
                 </p>
                 <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  <span>📷 {item.photos.length} Fotos</span>
+                  <span>📷 {item.photosImovel.length + item.photosMedidor.length} Fotos</span>
                   <span>📅 {new Date(item.createdAt).toLocaleDateString('pt-BR')}</span>
                 </div>
               </div>
 
               {/* Remove item from queue button */}
               <button 
-                onClick={() => handleRemoveItem(item.id, item.clientName)}
+                onClick={() => handleRemoveItem(item.id, item.nomeAutor)}
                 disabled={isSyncing}
                 style={{
                   position: 'absolute',

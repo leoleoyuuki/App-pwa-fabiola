@@ -33,23 +33,43 @@ export async function syncInspection(
   
   // --- Google Apps Script Web App Integration (CORS Bypass) ---
   if (webhookUrl.includes('script.google.com')) {
-    const photosWithBase64: { name: string; type: string; base64: string }[] = [];
-    const totalPhotos = inspection.photos.length;
+    const photosImovelWithBase64: { name: string; type: string; base64: string }[] = [];
+    const photosMedidorWithBase64: { name: string; type: string; base64: string }[] = [];
+    const totalPhotos = inspection.photosImovel.length + inspection.photosMedidor.length;
+    let convertedCount = 0;
 
-    // Convert all blobs to Base64 (updates progress from 0% to 30%)
-    for (let i = 0; i < totalPhotos; i++) {
-      const photo = inspection.photos[i];
+    // Convert photosImovel
+    for (let i = 0; i < inspection.photosImovel.length; i++) {
+      const photo = inspection.photosImovel[i];
       onProgress({
-        loaded: i,
+        loaded: convertedCount,
         total: totalPhotos,
-        percentage: Math.round((i / totalPhotos) * 30)
+        percentage: Math.round((convertedCount / totalPhotos) * 30)
       });
       const base64 = await blobToBase64(photo.original);
-      photosWithBase64.push({
+      photosImovelWithBase64.push({
         name: photo.name,
         type: photo.type,
         base64
       });
+      convertedCount++;
+    }
+
+    // Convert photosMedidor
+    for (let i = 0; i < inspection.photosMedidor.length; i++) {
+      const photo = inspection.photosMedidor[i];
+      onProgress({
+        loaded: convertedCount,
+        total: totalPhotos,
+        percentage: Math.round((convertedCount / totalPhotos) * 30)
+      });
+      const base64 = await blobToBase64(photo.original);
+      photosMedidorWithBase64.push({
+        name: photo.name,
+        type: photo.type,
+        base64
+      });
+      convertedCount++;
     }
 
     return new Promise((resolve, reject) => {
@@ -85,12 +105,35 @@ export async function syncInspection(
       const payload = {
         id: inspection.id,
         createdAt: inspection.createdAt,
-        clientName: inspection.clientName,
-        projectAddress: inspection.projectAddress,
-        inspectorName: inspection.inspectorName,
-        stage: inspection.customFields?.stage || 'Marcenaria',
-        notes: inspection.notes,
-        photos: photosWithBase64
+        nomeAutor: inspection.nomeAutor,
+        numeroProcesso: inspection.numeroProcesso,
+        reuConcessionaria: inspection.reuConcessionaria,
+        tipoAcao: inspection.tipoAcao,
+        dataVistoria: inspection.dataVistoria,
+        numeroVistoria: inspection.numeroVistoria,
+        periodoVistoria: inspection.periodoVistoria,
+        representacaoAutor: inspection.representacaoAutor,
+        representacaoReu: inspection.representacaoReu,
+        observacoesPresenca: inspection.observacoesPresenca,
+        numeroMedidor: inspection.numeroMedidor,
+        medidorChip: inspection.medidorChip,
+        condicoesMedidor: inspection.condicoesMedidor,
+        corteEnergia: inspection.corteEnergia,
+        qtdPessoas: inspection.qtdPessoas,
+        qtdComodos: inspection.qtdComodos,
+        numLampadas: inspection.numLampadas,
+        numTvs: inspection.numTvs,
+        numVentiladores: inspection.numVentiladores,
+        numVentiladoresTeto: inspection.numVentiladoresTeto,
+        numArCondicionados: inspection.numArCondicionados,
+        numGeladeiras: inspection.numGeladeiras,
+        numChuveiros: inspection.numChuveiros,
+        numMaquinasLavar: inspection.numMaquinasLavar,
+        numFreezers: inspection.numFreezers,
+        checklist: inspection.checklist.join(', '),
+        observacoesFinais: inspection.observacoesFinais,
+        photosImovel: photosImovelWithBase64,
+        photosMedidor: photosMedidorWithBase64
       };
 
       xhr.send(JSON.stringify(payload));
@@ -132,19 +175,40 @@ export async function syncInspection(
     const formData = new FormData();
     formData.append('id', inspection.id);
     formData.append('createdAt', inspection.createdAt);
-    formData.append('clientName', inspection.clientName);
-    formData.append('projectAddress', inspection.projectAddress);
-    formData.append('inspectorName', inspection.inspectorName);
-    formData.append('notes', inspection.notes);
+    formData.append('nomeAutor', inspection.nomeAutor);
+    formData.append('numeroProcesso', inspection.numeroProcesso);
+    formData.append('reuConcessionaria', inspection.reuConcessionaria);
+    formData.append('tipoAcao', inspection.tipoAcao);
+    formData.append('dataVistoria', inspection.dataVistoria);
+    formData.append('numeroVistoria', inspection.numeroVistoria);
+    formData.append('periodoVistoria', inspection.periodoVistoria);
+    formData.append('representacaoAutor', inspection.representacaoAutor);
+    formData.append('representacaoReu', inspection.representacaoReu);
+    formData.append('observacoesPresenca', inspection.observacoesPresenca);
+    formData.append('numeroMedidor', inspection.numeroMedidor);
+    formData.append('medidorChip', inspection.medidorChip);
+    formData.append('condicoesMedidor', inspection.condicoesMedidor);
+    formData.append('corteEnergia', inspection.corteEnergia);
+    formData.append('qtdPessoas', inspection.qtdPessoas);
+    formData.append('qtdComodos', inspection.qtdComodos);
+    formData.append('numLampadas', inspection.numLampadas);
+    formData.append('numTvs', inspection.numTvs);
+    formData.append('numVentiladores', inspection.numVentiladores);
+    formData.append('numVentiladoresTeto', inspection.numVentiladoresTeto);
+    formData.append('numArCondicionados', inspection.numArCondicionados);
+    formData.append('numGeladeiras', inspection.numGeladeiras);
+    formData.append('numChuveiros', inspection.numChuveiros);
+    formData.append('numMaquinasLavar', inspection.numMaquinasLavar);
+    formData.append('numFreezers', inspection.numFreezers);
+    formData.append('checklist', inspection.checklist.join(', '));
+    formData.append('observacoesFinais', inspection.observacoesFinais);
 
-    if (inspection.customFields) {
-      Object.entries(inspection.customFields).forEach(([key, val]) => {
-        formData.append(key, val);
-      });
-    }
+    inspection.photosImovel.forEach((photo) => {
+      formData.append('photosImovel', photo.original, photo.name);
+    });
 
-    inspection.photos.forEach((photo) => {
-      formData.append('photos', photo.original, photo.name);
+    inspection.photosMedidor.forEach((photo) => {
+      formData.append('photosMedidor', photo.original, photo.name);
     });
 
     xhr.send(formData);

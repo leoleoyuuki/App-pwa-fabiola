@@ -27,12 +27,35 @@ export interface PhotoData {
 export interface InspectionData {
   id: string;
   createdAt: string;
-  clientName: string;
-  projectAddress: string;
-  inspectorName: string;
-  notes: string;
-  photos: PhotoData[];
-  customFields?: Record<string, string>; // Extensible fields if needed
+  nomeAutor: string;
+  numeroProcesso: string;
+  reuConcessionaria: string;
+  tipoAcao: string;
+  dataVistoria: string;
+  numeroVistoria: string;
+  periodoVistoria: string;
+  representacaoAutor: string;
+  representacaoReu: string;
+  observacoesPresenca: string;
+  numeroMedidor: string;
+  medidorChip: string;
+  condicoesMedidor: string;
+  corteEnergia: string;
+  qtdPessoas: string;
+  qtdComodos: string;
+  numLampadas: string;
+  numTvs: string;
+  numVentiladores: string;
+  numVentiladoresTeto: string;
+  numArCondicionados: string;
+  numGeladeiras: string;
+  numChuveiros: string;
+  numMaquinasLavar: string;
+  numFreezers: string;
+  checklist: string[];
+  observacoesFinais: string;
+  photosImovel: PhotoData[];
+  photosMedidor: PhotoData[];
 }
 
 export interface HistoryItem {
@@ -85,10 +108,10 @@ export const db = {
       id: inspection.id,
       createdAt: inspection.createdAt,
       syncedAt: new Date().toISOString(),
-      clientName: inspection.clientName,
-      projectAddress: inspection.projectAddress,
-      inspectorName: inspection.inspectorName,
-      photoCount: inspection.photos.length
+      clientName: inspection.nomeAutor,
+      projectAddress: inspection.numeroProcesso || 'S/N',
+      inspectorName: inspection.tipoAcao,
+      photoCount: inspection.photosImovel.length + inspection.photosMedidor.length
     };
     await historyStore.setItem(inspection.id, historyItem);
   },
