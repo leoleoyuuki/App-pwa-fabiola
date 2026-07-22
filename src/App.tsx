@@ -3,10 +3,11 @@ import { db } from './utils/db';
 import type { InspectionData, HistoryItem } from './utils/db';
 import { InspectionForm } from './components/InspectionForm';
 import { SyncQueue } from './components/SyncQueue';
-import { ClipboardList, Send } from 'lucide-react';
+import { ClipboardList, Send, FileSpreadsheet } from 'lucide-react';
+import { CloudHistory } from './components/CloudHistory';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'form' | 'queue'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'queue' | 'records'>('form');
   const [queue, setQueue] = useState<InspectionData[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -86,41 +87,41 @@ function App() {
           </div>
         </div>
       )}
-      {/* Elegante Top Bar */}
+      {/* Header Bar */}
       <header 
+        className="glass-panel"
         style={{
-          padding: '16px 20px',
+          padding: '16px 24px',
           borderBottom: '1px solid var(--border-color)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
           backgroundColor: 'var(--bg-card)',
           position: 'sticky',
           top: 0,
           zIndex: 100
         }}
       >
-        <span 
-          style={{ 
-            fontFamily: 'var(--font-serif)', 
-            fontSize: '1.4rem', 
-            fontWeight: 500, 
-            letterSpacing: '0.02em',
-            color: 'var(--text-primary)'
-          }}
-        >
-          Fabiola
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ maxWidth: '600px', margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span 
             style={{ 
-              fontSize: '0.75rem', 
-              color: 'var(--text-secondary)',
-              fontWeight: 400
+              fontFamily: 'var(--font-serif)', 
+              fontSize: '1.4rem', 
+              fontWeight: 500, 
+              letterSpacing: '0.02em',
+              color: 'var(--text-primary)'
             }}
           >
-            Arquiteta & Designer
+            Fabiola
           </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span 
+              style={{ 
+                fontSize: '0.75rem', 
+                color: 'var(--text-secondary)',
+                fontWeight: 400
+              }}
+            >
+              Arquiteta & Designer
+            </span>
+          </div>
         </div>
       </header>
 
@@ -131,7 +132,7 @@ function App() {
             onInspectionAdded={refreshData} 
             isOnline={isOnline}
           />
-        ) : (
+        ) : activeTab === 'queue' ? (
           <SyncQueue 
             queue={queue}
             history={history}
@@ -140,17 +141,24 @@ function App() {
             setWebhookUrl={setWebhookUrl}
             isOnline={isOnline}
           />
+        ) : (
+          <CloudHistory 
+            webhookUrl={webhookUrl}
+            isOnline={isOnline}
+          />
         )}
       </main>
 
-      {/* fixed bottom mobile navigation bar */}
+      {/* fixed bottom navigation bar (centered floating dock style) */}
       <nav 
         className="glass-panel"
         style={{
           position: 'fixed',
           bottom: '16px',
-          left: '16px',
-          right: '16px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: 'calc(100% - 32px)',
+          maxWidth: '600px',
           height: '66px',
           display: 'flex',
           justifyContent: 'space-around',
@@ -223,6 +231,26 @@ function App() {
               {queue.length}
             </span>
           )}
+        </button>
+
+        {/* Cloud Records Tab Button */}
+        <button
+          onClick={() => setActiveTab('records')}
+          style={{
+            background: 'none',
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            color: activeTab === 'records' ? 'var(--accent-gold)' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            padding: '8px 16px',
+            transition: 'var(--transition)'
+          }}
+        >
+          <FileSpreadsheet size={22} style={{ strokeWidth: activeTab === 'records' ? 2.5 : 2 }} />
+          <span style={{ fontSize: '0.75rem', fontWeight: activeTab === 'records' ? 600 : 400 }}>Relatórios</span>
         </button>
       </nav>
     </div>

@@ -68,6 +68,11 @@ export interface HistoryItem {
   photoCount: number;
 }
 
+const cacheStore = localforage.createInstance({
+  name: 'fabiola_inspection',
+  storeName: 'cache'
+});
+
 export const db = {
   // --- Draft Management ---
   async saveDraft(data: Omit<InspectionData, 'id' | 'createdAt'>): Promise<void> {
@@ -125,5 +130,14 @@ export const db = {
     }
     // Sort newest first
     return items.sort((a, b) => new Date(b.syncedAt).getTime() - new Date(a.syncedAt).getTime());
+  },
+
+  // --- Cached Cloud Records from Google Sheets ---
+  async saveCloudRecords(records: any[]): Promise<void> {
+    await cacheStore.setItem('cloud_records', records);
+  },
+
+  async getCloudRecords(): Promise<any[] | null> {
+    return await cacheStore.getItem<any[]>('cloud_records');
   }
 };
