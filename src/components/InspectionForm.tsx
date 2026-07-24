@@ -61,6 +61,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   // Separate photo states
   const [photosImovel, setPhotosImovel] = useState<PhotoData[]>([]);
   const [photosMedidor, setPhotosMedidor] = useState<PhotoData[]>([]);
+  const [photoTab, setPhotoTab] = useState<'imovel' | 'medidor'>('imovel');
 
   // State flags
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
@@ -736,145 +737,218 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
             </div>
           )}
 
-          {/* 7.1: Fotos do Imóvel */}
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-            <span className="form-label" style={{ fontWeight: 600, marginBottom: '8px' }}>
-              Fotos do Imóvel ({photosImovel.length})
-            </span>
-            <div className="grid grid-cols-2" style={{ gap: '12px', marginBottom: '12px' }}>
-              <button 
-                type="button" 
-                className="btn btn-gold" 
-                onClick={() => cameraImovelRef.current?.click()}
-                disabled={isLoadingPhotos}
-              >
-                <Camera size={18} /> Tirar Foto
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => galleryImovelRef.current?.click()}
-                disabled={isLoadingPhotos}
-              >
-                <ImageIcon size={18} /> Galeria
-              </button>
-            </div>
-
-            {photosImovel.length > 0 && (
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', 
-                gap: '8px', 
-                maxHeight: '200px', 
-                overflowY: 'auto',
-                padding: '4px',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                backgroundColor: 'var(--bg-primary)'
-              }}>
-                {photosImovel.map((photo) => (
-                  <div key={photo.id} className="photo-grid-item">
-                    <img 
-                      src={photo.thumbnail} 
-                      alt={photo.name} 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(photo.id, 'imovel')}
-                      style={{
-                        position: 'absolute',
-                        top: '2px',
-                        right: '2px',
-                        backgroundColor: 'rgba(184, 120, 120, 0.9)',
-                        border: 'none',
-                        borderRadius: '4px',
-                        width: '24px',
-                        height: '24px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        color: 'white'
-                      }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* Custom Segmented Tab Switcher for Photos */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '8px', 
+            border: '1px solid var(--border-color)', 
+            borderRadius: 'var(--radius-sm)', 
+            padding: '4px',
+            backgroundColor: 'var(--bg-primary)',
+            marginTop: '8px',
+            marginBottom: '8px'
+          }}>
+            <button
+              type="button"
+              onClick={() => setPhotoTab('imovel')}
+              className="btn"
+              style={{
+                flex: 1,
+                padding: '12px 8px',
+                fontSize: '0.8rem',
+                borderRadius: 'var(--radius-xs)',
+                border: 'none',
+                backgroundColor: photoTab === 'imovel' ? 'var(--text-primary)' : 'transparent',
+                color: photoTab === 'imovel' ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                textTransform: 'none',
+                letterSpacing: 'normal',
+                fontWeight: photoTab === 'imovel' ? 600 : 300,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                alignItems: 'center',
+                boxShadow: photoTab === 'imovel' ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
+                transition: 'var(--transition-smooth)'
+              }}
+            >
+              <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fotos do Imóvel</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>({photosImovel.length} adicionadas)</span>
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => setPhotoTab('medidor')}
+              className="btn"
+              style={{
+                flex: 1,
+                padding: '12px 8px',
+                fontSize: '0.8rem',
+                borderRadius: 'var(--radius-xs)',
+                border: 'none',
+                backgroundColor: photoTab === 'medidor' ? 'var(--text-primary)' : 'transparent',
+                color: photoTab === 'medidor' ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                textTransform: 'none',
+                letterSpacing: 'normal',
+                fontWeight: photoTab === 'medidor' ? 600 : 300,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                alignItems: 'center',
+                boxShadow: photoTab === 'medidor' ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
+                transition: 'var(--transition-smooth)'
+              }}
+            >
+              <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fotos do Medidor</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>({photosMedidor.length} adicionadas)</span>
+            </button>
           </div>
 
-          {/* 7.2: Fotos do Medidor */}
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-            <span className="form-label" style={{ fontWeight: 600, marginBottom: '8px' }}>
-              Fotos do Medidor ({photosMedidor.length})
-            </span>
-            <div className="grid grid-cols-2" style={{ gap: '12px', marginBottom: '12px' }}>
-              <button 
-                type="button" 
-                className="btn btn-gold" 
-                onClick={() => cameraMedidorRef.current?.click()}
-                disabled={isLoadingPhotos}
-              >
-                <Camera size={18} /> Tirar Foto
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => galleryMedidorRef.current?.click()}
-                disabled={isLoadingPhotos}
-              >
-                <ImageIcon size={18} /> Galeria
-              </button>
-            </div>
-
-            {photosMedidor.length > 0 && (
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', 
-                gap: '8px', 
-                maxHeight: '200px', 
-                overflowY: 'auto',
-                padding: '4px',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                backgroundColor: 'var(--bg-primary)'
-              }}>
-                {photosMedidor.map((photo) => (
-                  <div key={photo.id} className="photo-grid-item">
-                    <img 
-                      src={photo.thumbnail} 
-                      alt={photo.name} 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(photo.id, 'medidor')}
-                      style={{
-                        position: 'absolute',
-                        top: '2px',
-                        right: '2px',
-                        backgroundColor: 'rgba(184, 120, 120, 0.9)',
-                        border: 'none',
-                        borderRadius: '4px',
-                        width: '24px',
-                        height: '24px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        color: 'white'
-                      }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
+          {/* Conditional upload controls based on the selected tab */}
+          {photoTab === 'imovel' ? (
+            <div className="fade-in" style={{ paddingTop: '8px' }}>
+              <div className="grid grid-cols-2" style={{ gap: '12px', marginBottom: '12px' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-gold" 
+                  onClick={() => cameraImovelRef.current?.click()}
+                  disabled={isLoadingPhotos}
+                  style={{ padding: '14px 10px' }}
+                >
+                  <Camera size={18} /> Tirar Foto Imóvel
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => galleryImovelRef.current?.click()}
+                  disabled={isLoadingPhotos}
+                  style={{ padding: '14px 10px' }}
+                >
+                  <ImageIcon size={18} /> Galeria Imóvel
+                </button>
               </div>
-            )}
-          </div>
+
+              {photosImovel.length > 0 ? (
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', 
+                  gap: '8px', 
+                  maxHeight: '200px', 
+                  overflowY: 'auto',
+                  padding: '6px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'var(--bg-primary)'
+                }}>
+                  {photosImovel.map((photo) => (
+                    <div key={photo.id} className="photo-grid-item">
+                      <img 
+                        src={photo.thumbnail} 
+                        alt={photo.name} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(photo.id, 'imovel')}
+                        style={{
+                          position: 'absolute',
+                          top: '2px',
+                          right: '2px',
+                          backgroundColor: 'rgba(184, 120, 120, 0.9)',
+                          border: 'none',
+                          borderRadius: '4px',
+                          width: '24px',
+                          height: '24px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          color: 'white'
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '24px 12px', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Nenhuma foto do Imóvel adicionada ainda.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="fade-in" style={{ paddingTop: '8px' }}>
+              <div className="grid grid-cols-2" style={{ gap: '12px', marginBottom: '12px' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-gold" 
+                  onClick={() => cameraMedidorRef.current?.click()}
+                  disabled={isLoadingPhotos}
+                  style={{ padding: '14px 10px' }}
+                >
+                  <Camera size={18} /> Tirar Foto Medidor
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => galleryMedidorRef.current?.click()}
+                  disabled={isLoadingPhotos}
+                  style={{ padding: '14px 10px' }}
+                >
+                  <ImageIcon size={18} /> Galeria Medidor
+                </button>
+              </div>
+
+              {photosMedidor.length > 0 ? (
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', 
+                  gap: '8px', 
+                  maxHeight: '200px', 
+                  overflowY: 'auto',
+                  padding: '6px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'var(--bg-primary)'
+                }}>
+                  {photosMedidor.map((photo) => (
+                    <div key={photo.id} className="photo-grid-item">
+                      <img 
+                        src={photo.thumbnail} 
+                        alt={photo.name} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(photo.id, 'medidor')}
+                        style={{
+                          position: 'absolute',
+                          top: '2px',
+                          right: '2px',
+                          backgroundColor: 'rgba(184, 120, 120, 0.9)',
+                          border: 'none',
+                          borderRadius: '4px',
+                          width: '24px',
+                          height: '24px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          color: 'white'
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '24px 12px', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Nenhuma foto do Medidor adicionada ainda.
+                </div>
+              )}
+            </div>
+          )}
 
           {draftSavedAt && (
             <div style={{ fontSize: '0.7rem', color: 'var(--accent-gold)', fontStyle: 'italic', textAlign: 'right', marginTop: '4px' }}>

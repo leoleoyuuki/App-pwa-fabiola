@@ -132,18 +132,18 @@ function App() {
             onInspectionAdded={refreshData} 
             isOnline={isOnline}
           />
-        ) : activeTab === 'queue' ? (
+        ) : activeTab === 'records' ? (
+          <CloudHistory 
+            webhookUrl={webhookUrl}
+            isOnline={isOnline}
+          />
+        ) : (
           <SyncQueue 
             queue={queue}
             history={history}
             refreshData={refreshData}
             webhookUrl={webhookUrl}
             setWebhookUrl={setWebhookUrl}
-            isOnline={isOnline}
-          />
-        ) : (
-          <CloudHistory 
-            webhookUrl={webhookUrl}
             isOnline={isOnline}
           />
         )}
@@ -185,6 +185,26 @@ function App() {
         >
           <ClipboardList size={22} style={{ strokeWidth: activeTab === 'form' ? 2.5 : 2 }} />
           <span style={{ fontSize: '0.75rem', fontWeight: activeTab === 'form' ? 600 : 400 }}>Inspeção</span>
+        </button>
+
+        {/* Cloud Records Tab Button */}
+        <button
+          onClick={() => setActiveTab('records')}
+          style={{
+            background: 'none',
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            color: activeTab === 'records' ? 'var(--accent-gold)' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            padding: '8px 16px',
+            transition: 'var(--transition)'
+          }}
+        >
+          <FileSpreadsheet size={22} style={{ strokeWidth: activeTab === 'records' ? 2.5 : 2 }} />
+          <span style={{ fontSize: '0.75rem', fontWeight: activeTab === 'records' ? 600 : 400 }}>Relatórios</span>
         </button>
 
         {/* Sync Tab Button with Badge */}
@@ -231,26 +251,6 @@ function App() {
               {queue.length}
             </span>
           )}
-        </button>
-
-        {/* Cloud Records Tab Button */}
-        <button
-          onClick={() => setActiveTab('records')}
-          style={{
-            background: 'none',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            color: activeTab === 'records' ? 'var(--accent-gold)' : 'var(--text-secondary)',
-            cursor: 'pointer',
-            padding: '8px 16px',
-            transition: 'var(--transition)'
-          }}
-        >
-          <FileSpreadsheet size={22} style={{ strokeWidth: activeTab === 'records' ? 2.5 : 2 }} />
-          <span style={{ fontSize: '0.75rem', fontWeight: activeTab === 'records' ? 600 : 400 }}>Relatórios</span>
         </button>
       </nav>
     </div>
