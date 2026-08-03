@@ -81,7 +81,7 @@ function App() {
         <div className={`loading-screen ${fadeClass}`}>
           <div className="loading-content">
             <img src="/logo192.png" className="loading-logo" alt="Logo" />
-            <h2 className="loading-title">Fabiola</h2>
+            <h2 className="loading-title">VistoriaPro</h2>
             <p className="loading-subtitle">Arquiteta & Designer</p>
             <div className="loading-spinner"></div>
           </div>
@@ -109,7 +109,7 @@ function App() {
               color: 'var(--text-primary)'
             }}
           >
-            Fabiola
+            VistoriaPro
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span 

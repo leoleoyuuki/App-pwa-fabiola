@@ -23,7 +23,7 @@ function getLocalIp() {
 const localIp = getLocalIp();
 
 console.log('\n=============================================================');
-console.log(' ✨  FABIOLA PWA - AMBIENTE DE DESENVOLVIMENTO INTEGRADO  ✨ ');
+console.log(' ✨  VISTORIAPRO PWA - AMBIENTE DE DESENVOLVIMENTO INTEGRADO  ✨ ');
 console.log('=============================================================');
 console.log(` 📱 PWA do App (Abra no navegador do celular):`);
 console.log(`    http://${localIp}:5173/`);
