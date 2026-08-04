@@ -5,6 +5,9 @@ import { InspectionForm } from './components/InspectionForm';
 import { SyncQueue } from './components/SyncQueue';
 import { ClipboardList, Send, FileSpreadsheet } from 'lucide-react';
 import { CloudHistory } from './components/CloudHistory';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './utils/firebase';
+import { Login } from './components/Login';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'form' | 'queue' | 'records'>('form');
@@ -16,9 +19,12 @@ function App() {
   const [isAppLoading, setIsAppLoading] = useState(true);
   const [fadeClass, setFadeClass] = useState('');
   
-  // Custom Webhook URL saved in localStorage
+  const [user, setUser] = useState<any>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  
+  // Custom Webhook URL saved in localStorage (with VistoriaPro Apps Script URL as default)
   const [webhookUrl, setWebhookUrl] = useState(() => {
-    return localStorage.getItem('fabiola_webhook_url') || '';
+    return localStorage.getItem('fabiola_webhook_url') || 'https://script.google.com/macros/s/AKfycbyZJM6rSwBr3BKD_LawYeeRUoynUhQIol4GILJnnCYiMCCzD4B2-JfXFjJCwe2rC4Q5/exec';
   });
 
   // Persist Webhook URL when it changes
@@ -38,6 +44,15 @@ function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, []);
+
+  // Monitor auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsCheckingAuth(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   // Fetch queue and history from IndexedDB
@@ -65,6 +80,25 @@ function App() {
     };
     init();
   }, []);
+
+  // If checking authentication status, show loading splash screen
+  if (isCheckingAuth) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-content">
+          <img src="/logo192.png" className="loading-logo" alt="Logo" />
+          <h2 className="loading-title">VistoriaPro</h2>
+          <p className="loading-subtitle">Arquiteta & Designer</p>
+          <div className="loading-spinner"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is not authenticated, show the login panel
+  if (!user) {
+    return <Login onLoginSuccess={refreshData} />;
+  }
 
   return (
     <div 

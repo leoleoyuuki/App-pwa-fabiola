@@ -15,6 +15,7 @@ import {
   AlertCircle, 
   Database
 } from 'lucide-react';
+import { auth } from '../utils/firebase';
 
 interface SyncQueueProps {
   queue: InspectionData[];
@@ -34,6 +35,7 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
   isOnline
 }) => {
   const [showSettings, setShowSettings] = useState(false);
+  const [isEditingWebhook, setIsEditingWebhook] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [currentSyncId, setCurrentSyncId] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
@@ -156,20 +158,61 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
         {/* Webhook Configuration Expandable Panel */}
         {showSettings && (
           <div className="fade-in" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginBottom: '16px' }}>
-            <div className="form-group" style={{ marginBottom: '12px' }}>
-              <label className="form-label">URL do Webhook (Make / Zapier)</label>
-              <input 
-                type="url" 
-                className="form-control" 
-                placeholder="https://hook.us1.make.com/..." 
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-                style={{ fontSize: '0.85rem' }}
-              />
+            {/* User Session Info & Sign Out */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', fontSize: '0.85rem' }}>
+              <div>
+                <span style={{ color: 'var(--text-secondary)' }}>Logado como:</span>
+                <div style={{ fontWeight: 500, color: 'var(--text-primary)', wordBreak: 'break-all' }}>{auth.currentUser?.email || 'Usuário offline'}</div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{ padding: '8px 12px', textTransform: 'none', fontSize: '0.75rem', borderRadius: 'var(--radius-sm)' }}
+                onClick={() => auth.signOut()}
+              >
+                Sair da Conta
+              </button>
             </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              Insira a URL que recebe a requisição POST (multipart/form-data) com os dados e fotos originais.
-            </p>
+
+            <div style={{ borderTop: '1px solid rgba(239, 239, 234, 0.5)', paddingTop: '12px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                <input 
+                  type="checkbox" 
+                  checked={isEditingWebhook} 
+                  onChange={(e) => setIsEditingWebhook(e.target.checked)}
+                  style={{ accentColor: 'var(--accent-gold)' }}
+                />
+                Alterar URL do Webhook (Avançado)
+              </label>
+
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label className="form-label">URL do Webhook (Google Apps Script)</label>
+                <input 
+                  type="url" 
+                  className="form-control" 
+                  placeholder="https://script.google.com/..." 
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  disabled={!isEditingWebhook}
+                  style={{ fontSize: '0.85rem', color: isEditingWebhook ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                />
+              </div>
+
+              {isEditingWebhook && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '6px 10px', fontSize: '0.75rem', marginTop: '6px', width: '100%', textTransform: 'none' }}
+                  onClick={() => {
+                    const defaultUrl = 'https://script.google.com/macros/s/AKfycbyZJM6rSwBr3BKD_LawYeeRUoynUhQIol4GILJnnCYiMCCzD4B2-JfXFjJCwe2rC4Q5/exec';
+                    setWebhookUrl(defaultUrl);
+                    setIsEditingWebhook(false);
+                  }}
+                >
+                  Restaurar URL Padrão
+                </button>
+              )}
+            </div>
           </div>
         )}
 
