@@ -139,5 +139,14 @@ export const db = {
 
   async getCloudRecords(): Promise<any[] | null> {
     return await cacheStore.getItem<any[]>('cloud_records');
+  },
+
+  // --- Offline-Cached Scheduled Cases (Processos Cadastrados) ---
+  async saveScheduledProcesses(processes: any[]): Promise<void> {
+    await cacheStore.setItem('scheduled_processes', processes);
+  },
+
+  async getScheduledProcesses(): Promise<any[] | null> {
+    return await cacheStore.getItem<any[]>('scheduled_processes');
   }
 };

@@ -17,7 +17,9 @@ import {
   Users,
   CheckSquare,
   Home,
-  Tv
+  Tv,
+  RefreshCw,
+  Search
 } from 'lucide-react';
 
 interface InspectionFormProps {
@@ -69,13 +71,67 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  // Scheduled processes state for offline prefilling
+  const [scheduledProcesses, setScheduledProcesses] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [isSyncingProcesses, setIsSyncingProcesses] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
+
   // Input refs for separate upload fields
   const cameraImovelRef = useRef<HTMLInputElement>(null);
   const galleryImovelRef = useRef<HTMLInputElement>(null);
   const cameraMedidorRef = useRef<HTMLInputElement>(null);
   const galleryMedidorRef = useRef<HTMLInputElement>(null);
 
-  // Load draft on mount
+  // Load scheduled processes from IndexedDB cache on mount
+  useEffect(() => {
+    const loadProcesses = async () => {
+      try {
+        const cached = await db.getScheduledProcesses();
+        if (cached) {
+          setScheduledProcesses(cached);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar processos agendados:', err);
+      }
+    };
+    loadProcesses();
+  }, []);
+
+  // Fetch scheduled processes list from the Google Sheets Web App
+  const handleSyncProcesses = async () => {
+    const defaultUrl = 'https://script.google.com/macros/s/AKfycbyZJM6rSwBr3BKD_LawYeeRUoynUhQIol4GILJnnCYiMCCzD4B2-JfXFjJCwe2rC4Q5/exec';
+    const webhookUrl = localStorage.getItem('fabiola_webhook_url') || defaultUrl;
+    if (!webhookUrl || !webhookUrl.includes('script.google.com')) {
+      setSyncSuccess('Erro: URL do Webhook inválida.');
+      setTimeout(() => setSyncSuccess(null), 3000);
+      return;
+    }
+    
+    setIsSyncingProcesses(true);
+    setSyncSuccess(null);
+    
+    try {
+      const response = await fetch(`${webhookUrl}?action=processos`, { method: 'GET' });
+      if (!response.ok) throw new Error(`HTTP: ${response.status}`);
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setScheduledProcesses(data);
+        await db.saveScheduledProcesses(data);
+        setSyncSuccess(`Sincronizado: ${data.length} cadastros salvos!`);
+        setTimeout(() => setSyncSuccess(null), 3000);
+      } else {
+        throw new Error('Resposta do servidor inválida.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao baixar cadastros:', err);
+      setSyncSuccess('Erro ao conectar com a planilha.');
+      setTimeout(() => setSyncSuccess(null), 4000);
+    } finally {
+      setIsSyncingProcesses(false);
+    }
+  };
   useEffect(() => {
     const loadDraft = async () => {
       try {
@@ -459,14 +515,134 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
         </p>
       </div>
 
+      {/* Sync Scheduled Processes Bar */}
+      <div className="card" style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        padding: '12px 16px', 
+        marginBottom: '20px', 
+        backgroundColor: 'var(--accent-gold-light)', 
+        border: '1px solid var(--accent-gold)',
+        borderRadius: 'var(--radius-sm)'
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>Processos Agendados</span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+            {syncSuccess ? syncSuccess : `${scheduledProcesses.length} salvos localmente (offline)`}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={handleSyncProcesses}
+          disabled={isSyncingProcesses || !isOnline}
+          style={{ 
+            padding: '6px 12px', 
+            fontSize: '0.75rem', 
+            textTransform: 'none', 
+            display: 'flex', 
+            gap: '6px', 
+            alignItems: 'center', 
+            height: '34px', 
+            borderRadius: 'var(--radius-xs)',
+            letterSpacing: 'normal'
+          }}
+        >
+          {isSyncingProcesses ? <Loader2 size={12} className="spin" /> : <RefreshCw size={12} />}
+          Sincronizar
+        </button>
+      </div>
+
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         
         {/* SECTION 1: Dados Gerais */}
-        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative' }}>
           <h2 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', color: 'var(--accent-gold)' }}>
             <User size={18} /> Dados Gerais
           </h2>
           
+          {/* Autocomplete Search input for scheduled cases */}
+          {scheduledProcesses.length > 0 && (
+            <div className="form-group" style={{ marginBottom: '12px', position: 'relative' }}>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-gold)' }}>
+                <Search size={12} /> Buscar Processo Cadastrado
+              </label>
+              <input 
+                type="text" 
+                className="form-control" 
+                placeholder="Busque por nome do Autor ou nº do Processo..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setShowSearchDropdown(true);
+                }}
+                onFocus={() => setShowSearchDropdown(true)}
+                style={{ fontSize: '0.9rem' }}
+              />
+              
+              {showSearchDropdown && searchQuery.trim() !== '' && (
+                <div style={{
+                  position: 'absolute',
+                  top: '55px',
+                  left: 0,
+                  width: '100%',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: '0 8px 24px rgba(24, 24, 23, 0.08)',
+                  zIndex: 200,
+                  maxHeight: '200px',
+                  overflowY: 'auto'
+                }}>
+                  {scheduledProcesses
+                    .filter(p => {
+                      const autor = (p.nomeAutor || '').toLowerCase();
+                      const proc = (p.numeroProcesso || '').toLowerCase();
+                      const query = searchQuery.toLowerCase();
+                      return autor.includes(query) || proc.includes(query);
+                    })
+                    .map((p, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '12px 16px',
+                          borderBottom: '1px solid var(--border-color)',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--accent-gold-light)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        onClick={() => {
+                          setNomeAutor(p.nomeAutor);
+                          setNumeroProcesso(p.numeroProcesso);
+                          setReuConcessionaria(p.reuConcessionaria);
+                          setSearchQuery('');
+                          setShowSearchDropdown(false);
+                        }}
+                      >
+                        <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{p.nomeAutor}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          Proc: {p.numeroProcesso} | Réu: {p.reuConcessionaria}
+                        </div>
+                      </div>
+                    ))}
+                  {scheduledProcesses.filter(p => {
+                    const autor = (p.nomeAutor || '').toLowerCase();
+                    const proc = (p.numeroProcesso || '').toLowerCase();
+                    const query = searchQuery.toLowerCase();
+                    return autor.includes(query) || proc.includes(query);
+                  }).length === 0 && (
+                    <div style={{ padding: '12px 16px', fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                      Nenhum processo correspondente.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Nome do Autor *</label>
             <input 
