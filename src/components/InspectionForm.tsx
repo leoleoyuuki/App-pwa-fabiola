@@ -18,13 +18,53 @@ import {
   CheckSquare,
   Home,
   Tv,
-  RefreshCw,
-  Search
+  RefreshCw
 } from 'lucide-react';
 
 interface InspectionFormProps {
   onInspectionAdded: () => void;
   isOnline: boolean;
+}
+
+function getTodayDateString(): string {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function normalizeDate(rawDate?: any): string {
+  if (!rawDate) return '';
+  const trimmed = rawDate.toString().trim();
+  // Check format DD/MM/YYYY or DD-MM-YYYY
+  const brMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (brMatch) {
+    const day = brMatch[1].padStart(2, '0');
+    const month = brMatch[2].padStart(2, '0');
+    let year = brMatch[3];
+    if (year.length === 2) year = '20' + year;
+    return `${year}-${month}-${day}`;
+  }
+  // Check format YYYY-MM-DD
+  const isoMatch = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (isoMatch) {
+    const year = isoMatch[1];
+    const month = isoMatch[2].padStart(2, '0');
+    const day = isoMatch[3].padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return trimmed;
+}
+
+function formatDisplayDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const norm = normalizeDate(dateStr);
+  const parts = norm.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
 }
 
 export const InspectionForm: React.FC<InspectionFormProps> = ({
@@ -71,10 +111,11 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // Scheduled processes state for offline prefilling
+  // Scheduled processes state for offline prefilling & Agenda
   const [scheduledProcesses, setScheduledProcesses] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [dateFilterMode, setDateFilterMode] = useState<'today' | 'custom' | 'all'>('today');
+  const [selectedFilterDate, setSelectedFilterDate] = useState<string>(getTodayDateString());
   const [isSyncingProcesses, setIsSyncingProcesses] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
 
@@ -502,6 +543,42 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     </div>
   );
 
+  // Agenda / Scheduled Process Computations
+  const todayStr = getTodayDateString();
+  const todayCount = scheduledProcesses.filter(p => normalizeDate(p.dataVistoria) === todayStr).length;
+
+  const filteredProcesses = scheduledProcesses.filter(p => {
+    if (dateFilterMode === 'all') return true;
+    const pDate = normalizeDate(p.dataVistoria);
+    if (dateFilterMode === 'today') {
+      return pDate === todayStr;
+    }
+    if (dateFilterMode === 'custom') {
+      return pDate === selectedFilterDate;
+    }
+    return true;
+  });
+
+  const searchedProcesses = scheduledProcesses.filter(p => {
+    if (!searchQuery.trim()) return false;
+    const q = searchQuery.toLowerCase();
+    const autor = (p.nomeAutor || '').toLowerCase();
+    const proc = (p.numeroProcesso || '').toLowerCase();
+    const reu = (p.reuConcessionaria || '').toLowerCase();
+    return autor.includes(q) || proc.includes(q) || reu.includes(q);
+  });
+
+  const applyProcess = (p: any) => {
+    if (p.nomeAutor) setNomeAutor(p.nomeAutor);
+    if (p.numeroProcesso) setNumeroProcesso(p.numeroProcesso);
+    if (p.reuConcessionaria) setReuConcessionaria(p.reuConcessionaria);
+    if (p.dataVistoria) {
+      const normDate = normalizeDate(p.dataVistoria);
+      if (normDate) setDataVistoria(normDate);
+    }
+    setDraftSavedAt(`Preenchido: ${p.nomeAutor}`);
+  };
+
   return (
     <div className="fade-in" style={{ padding: '16px 16px 120px 16px', maxWidth: '600px', margin: '0 auto', width: '100%' }}>
       
@@ -562,84 +639,174 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
             <User size={18} /> Dados Gerais
           </h2>
           
-          {/* Autocomplete Search input for scheduled cases */}
+          {/* Agenda de Vistorias / Processos Agendados por Data */}
           {scheduledProcesses.length > 0 && (
-            <div className="form-group" style={{ marginBottom: '12px', position: 'relative' }}>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-gold)' }}>
-                <Search size={12} /> Buscar Processo Cadastrado
-              </label>
-              <input 
-                type="text" 
-                className="form-control" 
-                placeholder="Busque por nome do Autor ou nº do Processo..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setShowSearchDropdown(true);
-                }}
-                onFocus={() => setShowSearchDropdown(true)}
-                style={{ fontSize: '0.9rem' }}
-              />
-              
-              {showSearchDropdown && searchQuery.trim() !== '' && (
-                <div style={{
-                  position: 'absolute',
-                  top: '55px',
-                  left: 0,
-                  width: '100%',
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-sm)',
-                  boxShadow: '0 8px 24px rgba(24, 24, 23, 0.08)',
-                  zIndex: 200,
-                  maxHeight: '200px',
-                  overflowY: 'auto'
-                }}>
-                  {scheduledProcesses
-                    .filter(p => {
-                      const autor = (p.nomeAutor || '').toLowerCase();
-                      const proc = (p.numeroProcesso || '').toLowerCase();
-                      const query = searchQuery.toLowerCase();
-                      return autor.includes(query) || proc.includes(query);
-                    })
-                    .map((p, idx) => (
+            <div style={{
+              padding: '14px',
+              backgroundColor: 'var(--bg-primary)',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-color)',
+              marginBottom: '12px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Calendar size={15} style={{ color: 'var(--accent-gold)' }} /> Agenda de Vistorias
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  {scheduledProcesses.length} na memória
+                </span>
+              </div>
+
+              {/* Botões de Filtro: Hoje | Calendário / Data | Todos */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateFilterMode('today');
+                    setSelectedFilterDate(getTodayDateString());
+                  }}
+                  className="btn"
+                  style={{
+                    flex: '1 1 auto',
+                    padding: '6px 10px',
+                    fontSize: '0.75rem',
+                    borderRadius: 'var(--radius-xs)',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: dateFilterMode === 'today' ? 'var(--text-primary)' : 'var(--bg-card)',
+                    color: dateFilterMode === 'today' ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                    fontWeight: dateFilterMode === 'today' ? 600 : 400,
+                    textTransform: 'none',
+                    letterSpacing: 'normal'
+                  }}
+                >
+                  Hoje ({todayCount})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDateFilterMode('all')}
+                  className="btn"
+                  style={{
+                    flex: '1 1 auto',
+                    padding: '6px 10px',
+                    fontSize: '0.75rem',
+                    borderRadius: 'var(--radius-xs)',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: dateFilterMode === 'all' ? 'var(--text-primary)' : 'var(--bg-card)',
+                    color: dateFilterMode === 'all' ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                    fontWeight: dateFilterMode === 'all' ? 600 : 400,
+                    textTransform: 'none',
+                    letterSpacing: 'normal'
+                  }}
+                >
+                  Todos ({scheduledProcesses.length})
+                </button>
+
+                <div style={{ flex: '1 1 120px', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={selectedFilterDate}
+                    onChange={(e) => {
+                      setSelectedFilterDate(e.target.value);
+                      setDateFilterMode('custom');
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: '0.75rem',
+                      height: '32px',
+                      backgroundColor: dateFilterMode === 'custom' ? 'var(--accent-gold-light)' : 'var(--bg-card)',
+                      borderColor: dateFilterMode === 'custom' ? 'var(--accent-gold)' : 'var(--border-color)'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Dropdown dos Processos Filtrados */}
+              {filteredProcesses.length > 0 ? (
+                <div className="form-group" style={{ marginBottom: '8px' }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>
+                    Selecione para preencher automaticamente:
+                  </label>
+                  <select
+                    className="form-control"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const idx = parseInt(e.target.value, 10);
+                      if (!isNaN(idx) && filteredProcesses[idx]) {
+                        applyProcess(filteredProcesses[idx]);
+                      }
+                    }}
+                    style={{
+                      fontSize: '0.85rem',
+                      padding: '8px 12px',
+                      backgroundColor: 'var(--bg-card)',
+                      fontWeight: 500
+                    }}
+                  >
+                    <option value="" disabled>-- Toque para escolher a vistoria --</option>
+                    {filteredProcesses.map((p, idx) => (
+                      <option key={idx} value={idx}>
+                        {p.nomeAutor} — {p.reuConcessionaria} {p.dataVistoria ? `(${formatDisplayDate(p.dataVistoria)})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div style={{ padding: '8px 10px', fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', backgroundColor: 'var(--bg-card)', borderRadius: 'var(--radius-xs)', border: '1px dashed var(--border-color)', marginBottom: '8px' }}>
+                  Nenhuma vistoria cadastrada para {dateFilterMode === 'today' ? 'hoje' : (dateFilterMode === 'custom' ? formatDisplayDate(selectedFilterDate) : 'esta seleção')}.
+                </div>
+              )}
+
+              {/* Busca Textual Rápida */}
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Ou busque por nome / número de processo..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ fontSize: '0.8rem', padding: '6px 10px', height: '32px' }}
+                />
+                {searchQuery.trim() !== '' && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '36px',
+                    left: 0,
+                    width: '100%',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    boxShadow: '0 8px 24px rgba(24, 24, 23, 0.1)',
+                    zIndex: 100,
+                    maxHeight: '180px',
+                    overflowY: 'auto'
+                  }}>
+                    {searchedProcesses.map((p, idx) => (
                       <div
                         key={idx}
-                        style={{
-                          padding: '12px 16px',
-                          borderBottom: '1px solid var(--border-color)',
-                          cursor: 'pointer',
-                          fontSize: '0.85rem',
-                          transition: 'background-color 0.2s'
-                        }}
+                        style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.8rem' }}
                         onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--accent-gold-light)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                         onClick={() => {
-                          setNomeAutor(p.nomeAutor);
-                          setNumeroProcesso(p.numeroProcesso);
-                          setReuConcessionaria(p.reuConcessionaria);
+                          applyProcess(p);
                           setSearchQuery('');
-                          setShowSearchDropdown(false);
                         }}
                       >
                         <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{p.nomeAutor}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                          Proc: {p.numeroProcesso} | Réu: {p.reuConcessionaria}
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                          Proc: {p.numeroProcesso} | Réu: {p.reuConcessionaria} {p.dataVistoria ? `| Data: ${formatDisplayDate(p.dataVistoria)}` : ''}
                         </div>
                       </div>
                     ))}
-                  {scheduledProcesses.filter(p => {
-                    const autor = (p.nomeAutor || '').toLowerCase();
-                    const proc = (p.numeroProcesso || '').toLowerCase();
-                    const query = searchQuery.toLowerCase();
-                    return autor.includes(query) || proc.includes(query);
-                  }).length === 0 && (
-                    <div style={{ padding: '12px 16px', fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
-                      Nenhum processo correspondente.
-                    </div>
-                  )}
-                </div>
-              )}
+                    {searchedProcesses.length === 0 && (
+                      <div style={{ padding: '10px', fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                        Nenhum processo encontrado.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
