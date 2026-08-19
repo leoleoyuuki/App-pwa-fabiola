@@ -21,6 +21,55 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 /**
+ * Converts a Blob file to an optimized JPEG Base64 string for PDF printing (max 1200px, ~100KB).
+ */
+function resizeImageForPdf(blob: Blob, maxWidth = 1200, maxHeight = 1200): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(event.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        // JPEG 0.75 is crystal clear for PDF printing and keeps each photo ~100KB
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(event.target?.result as string);
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      blobToBase64(blob).then(resolve).catch(() => resolve(''));
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
  * Uploads an inspection report and all its high-resolution photos to a Webhook URL.
  * Detects if the target is Google Apps Script to automatically switch to a CORS-safe
  * text/plain JSON payload with Base64 encoded images.
@@ -33,8 +82,8 @@ export async function syncInspection(
   
   // --- Google Apps Script Web App Integration (CORS Bypass) ---
   if (webhookUrl.includes('script.google.com')) {
-    const photosImovelWithBase64: { name: string; type: string; base64: string }[] = [];
-    const photosMedidorWithBase64: { name: string; type: string; base64: string }[] = [];
+    const photosImovelWithBase64: { name: string; type: string; base64: string; pdfBase64: string }[] = [];
+    const photosMedidorWithBase64: { name: string; type: string; base64: string; pdfBase64: string }[] = [];
     const totalPhotos = inspection.photosImovel.length + inspection.photosMedidor.length;
     let convertedCount = 0;
 
@@ -47,10 +96,12 @@ export async function syncInspection(
         percentage: Math.round((convertedCount / totalPhotos) * 30)
       });
       const base64 = await blobToBase64(photo.original);
+      const pdfBase64 = await resizeImageForPdf(photo.original);
       photosImovelWithBase64.push({
         name: photo.name,
         type: photo.type,
-        base64
+        base64,
+        pdfBase64
       });
       convertedCount++;
     }
@@ -64,10 +115,12 @@ export async function syncInspection(
         percentage: Math.round((convertedCount / totalPhotos) * 30)
       });
       const base64 = await blobToBase64(photo.original);
+      const pdfBase64 = await resizeImageForPdf(photo.original);
       photosMedidorWithBase64.push({
         name: photo.name,
         type: photo.type,
-        base64
+        base64,
+        pdfBase64
       });
       convertedCount++;
     }
