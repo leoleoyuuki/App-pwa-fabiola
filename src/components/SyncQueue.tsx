@@ -42,17 +42,19 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Synchronous ref to prevent double-execution from StrictMode double-rendering
+  // Synchronous ref to prevent double-execution
   const isSyncingRef = useRef(false);
+  const inFlightIdsRef = useRef<Set<string>>(new Set());
 
-  // Auto-sync when online if queue has items
+  // Auto-sync when transitioning from offline to online
+  const prevOnlineRef = useRef(isOnline);
   useEffect(() => {
-    if (isOnline && queue.length > 0 && !isSyncing && !isSyncingRef.current) {
-      // Prompt user or start auto-sync
-      // For safety, we can auto-trigger it or let them tap. Let's do auto-sync for a seamless UX!
+    // Only auto-sync when online status changes from false -> true
+    if (!prevOnlineRef.current && isOnline && queue.length > 0 && !isSyncingRef.current) {
       handleSyncAll();
     }
-  }, [isOnline, queue.length]);
+    prevOnlineRef.current = isOnline;
+  }, [isOnline]);
 
   const handleSyncAll = async () => {
     if (queue.length === 0 || isSyncingRef.current) return;
@@ -70,6 +72,12 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
 
     // Sync items one by one (FIFO)
     for (const inspection of queue) {
+      // Prevent duplicate syncing of the exact same inspection ID
+      if (inFlightIdsRef.current.has(inspection.id)) {
+        continue;
+      }
+
+      inFlightIdsRef.current.add(inspection.id);
       setCurrentSyncId(inspection.id);
       setSyncProgress({ loaded: 0, total: 0, percentage: 0 });
 
@@ -88,6 +96,8 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
         hasError = true;
         setErrorMsg(`Falha ao enviar "${inspection.nomeAutor}": ${err.message || err}`);
         break; // Stop sync queue on error
+      } finally {
+        inFlightIdsRef.current.delete(inspection.id);
       }
     }
 
