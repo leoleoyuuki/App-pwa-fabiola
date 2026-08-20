@@ -66,6 +66,8 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
     setErrorMsg(null);
     setSuccessMsg(null);
 
+    let hasError = false;
+
     // Sync items one by one (FIFO)
     for (const inspection of queue) {
       setCurrentSyncId(inspection.id);
@@ -83,6 +85,7 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
         
         refreshData();
       } catch (err: any) {
+        hasError = true;
         setErrorMsg(`Falha ao enviar "${inspection.nomeAutor}": ${err.message || err}`);
         break; // Stop sync queue on error
       }
@@ -93,7 +96,7 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
     setCurrentSyncId(null);
     setSyncProgress(null);
     
-    if (!errorMsg) {
+    if (!hasError) {
       setSuccessMsg('Sincronização concluída com sucesso!');
     }
   };

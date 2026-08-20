@@ -125,72 +125,85 @@ export async function syncInspection(
       convertedCount++;
     }
 
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', webhookUrl);
-      
-      // Force text/plain to avoid browser CORS preflight (OPTIONS)
-      xhr.setRequestHeader('Content-Type', 'text/plain');
-      xhr.addEventListener('load', () => {
-        // Google Web Apps redirect to googleusercontent on success (status 200 or 302/redirect followed)
-        if (xhr.status >= 200 && xhr.status < 300) {
-          onProgress({ loaded: 1, total: 1, percentage: 100 });
-          try {
-            const response = JSON.parse(xhr.responseText);
-            if (response.status === 'erro') {
-              reject(new Error(`Erro no Script: ${response.message}`));
-            } else {
-              resolve();
-            }
-          } catch {
-            // Sometimes Google Redirect responses can't be parsed as JSON directly, but status 200 means success
-            resolve();
+    const payload = {
+      id: inspection.id,
+      createdAt: inspection.createdAt,
+      nomeAutor: inspection.nomeAutor,
+      numeroProcesso: inspection.numeroProcesso,
+      reuConcessionaria: inspection.reuConcessionaria,
+      tipoAcao: inspection.tipoAcao,
+      dataVistoria: inspection.dataVistoria,
+      numeroVistoria: inspection.numeroVistoria,
+      periodoVistoria: inspection.periodoVistoria,
+      representacaoAutor: inspection.representacaoAutor,
+      representacaoReu: inspection.representacaoReu,
+      observacoesPresenca: inspection.observacoesPresenca,
+      numeroMedidor: inspection.numeroMedidor,
+      medidorChip: inspection.medidorChip,
+      condicoesMedidor: inspection.condicoesMedidor,
+      corteEnergia: inspection.corteEnergia,
+      qtdPessoas: inspection.qtdPessoas,
+      qtdComodos: inspection.qtdComodos,
+      numLampadas: inspection.numLampadas,
+      numTvs: inspection.numTvs,
+      numVentiladores: inspection.numVentiladores,
+      numVentiladoresTeto: inspection.numVentiladoresTeto,
+      numArCondicionados: inspection.numArCondicionados,
+      numGeladeiras: inspection.numGeladeiras,
+      numChuveiros: inspection.numChuveiros,
+      numMaquinasLavar: inspection.numMaquinasLavar,
+      numFreezers: inspection.numFreezers,
+      checklist: inspection.checklist.join(', '),
+      observacoesFinais: inspection.observacoesFinais,
+      photosImovel: photosImovelWithBase64,
+      photosMedidor: photosMedidorWithBase64
+    };
+
+    onProgress({ loaded: 1, total: 2, percentage: 60 });
+
+    try {
+      // First try standard fetch with text/plain
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        onProgress({ loaded: 2, total: 2, percentage: 100 });
+        try {
+          const resData = await response.json();
+          if (resData && resData.status === 'erro') {
+            throw new Error(`Erro no Script: ${resData.message}`);
           }
-        } else {
-          reject(new Error(`Erro no Google Script: Status ${xhr.status}`));
+        } catch (jsonErr: any) {
+          if (jsonErr.message && jsonErr.message.startsWith('Erro no Script:')) {
+            throw jsonErr;
+          }
         }
-      });
-
-      xhr.addEventListener('error', () => {
-        reject(new Error('Falha de conexão com o Google. Verifique o link de publicação do Web App.'));
-      });
-
-      const payload = {
-        id: inspection.id,
-        createdAt: inspection.createdAt,
-        nomeAutor: inspection.nomeAutor,
-        numeroProcesso: inspection.numeroProcesso,
-        reuConcessionaria: inspection.reuConcessionaria,
-        tipoAcao: inspection.tipoAcao,
-        dataVistoria: inspection.dataVistoria,
-        numeroVistoria: inspection.numeroVistoria,
-        periodoVistoria: inspection.periodoVistoria,
-        representacaoAutor: inspection.representacaoAutor,
-        representacaoReu: inspection.representacaoReu,
-        observacoesPresenca: inspection.observacoesPresenca,
-        numeroMedidor: inspection.numeroMedidor,
-        medidorChip: inspection.medidorChip,
-        condicoesMedidor: inspection.condicoesMedidor,
-        corteEnergia: inspection.corteEnergia,
-        qtdPessoas: inspection.qtdPessoas,
-        qtdComodos: inspection.qtdComodos,
-        numLampadas: inspection.numLampadas,
-        numTvs: inspection.numTvs,
-        numVentiladores: inspection.numVentiladores,
-        numVentiladoresTeto: inspection.numVentiladoresTeto,
-        numArCondicionados: inspection.numArCondicionados,
-        numGeladeiras: inspection.numGeladeiras,
-        numChuveiros: inspection.numChuveiros,
-        numMaquinasLavar: inspection.numMaquinasLavar,
-        numFreezers: inspection.numFreezers,
-        checklist: inspection.checklist.join(', '),
-        observacoesFinais: inspection.observacoesFinais,
-        photosImovel: photosImovelWithBase64,
-        photosMedidor: photosMedidorWithBase64
-      };
-
-      xhr.send(JSON.stringify(payload));
-    });
+        return;
+      }
+      throw new Error(`Status ${response.status}`);
+    } catch (fetchErr: any) {
+      if (fetchErr.message && fetchErr.message.startsWith('Erro no Script:')) {
+        throw fetchErr;
+      }
+      
+      // If standard fetch failed due to iOS / Safari CORS redirect restrictions (302 redirect to googleusercontent),
+      // fallback to mode: 'no-cors' which bypasses Safari's redirect block reliably
+      try {
+        await fetch(webhookUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        onProgress({ loaded: 2, total: 2, percentage: 100 });
+        return;
+      } catch (noCorsErr: any) {
+        throw new Error(fetchErr.message || 'Falha de conexão com o Google Apps Script.');
+      }
+    }
   }
 
   // --- Standard Webhook Flow (Multipart / Form-Data for Make, Zapier, etc.) ---
