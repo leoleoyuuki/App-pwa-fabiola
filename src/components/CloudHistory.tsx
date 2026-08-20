@@ -29,9 +29,55 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
   const [records, setRecords] = useState<any[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilterMode, setDateFilterMode] = useState<'all' | 'today' | 'custom'>('all');
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
+
+  // Helper: Get today in YYYY-MM-DD format
+  const getTodayYMD = () => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  // Helper: Clean date string from trailing 00:00 or convert ISO to DD/MM/YYYY
+  const cleanDateOnly = (val: string | undefined): string => {
+    if (!val) return 'S/D';
+    let clean = String(val).replace(/\s+00:00(:00)?$/, '').trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
+      const [y, m, d] = clean.substring(0, 10).split('-');
+      return `${d}/${m}/${y}`;
+    }
+    return clean;
+  };
+
+  // Helper: Normalize any date string (BR or ISO) to YYYY-MM-DD
+  const normalizeToYMD = (val: string | undefined): string => {
+    if (!val) return '';
+    const str = String(val).trim();
+    const brMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (brMatch) {
+      const d = brMatch[1].padStart(2, '0');
+      const m = brMatch[2].padStart(2, '0');
+      const y = brMatch[3];
+      return `${y}-${m}-${d}`;
+    }
+    const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    }
+    return '';
+  };
 
   // Load cached records on mount
   useEffect(() => {
@@ -53,23 +99,46 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
     }
   }, [webhookUrl, isOnline]);
 
-  // Filter records dynamically when search term or records change
+  // Filter records dynamically when search term, date filter, or records change
   useEffect(() => {
-    if (!searchTerm.trim()) {
-      setFilteredRecords(records);
-      return;
+    let result = records;
+
+    // 1. Date Filter
+    if (dateFilterMode === 'today') {
+      const todayYMD = getTodayYMD();
+      result = result.filter(rec => {
+        const dVistoria = normalizeToYMD(rec.DatadaVistoria);
+        const dEnvio = normalizeToYMD(rec.DatadeEnvio);
+        return dVistoria === todayYMD || dEnvio === todayYMD;
+      });
+    } else if (dateFilterMode === 'custom' && selectedDate) {
+      result = result.filter(rec => {
+        const dVistoria = normalizeToYMD(rec.DatadaVistoria);
+        const dEnvio = normalizeToYMD(rec.DatadeEnvio);
+        return dVistoria === selectedDate || dEnvio === selectedDate;
+      });
     }
 
-    const term = searchTerm.toLowerCase();
-    const filtered = records.filter(rec => {
-      const nome = (rec.NomedoAutor || '').toLowerCase();
-      const proc = (rec.NúmerodoProcesso || '').toLowerCase();
-      const reu = (rec.RéuConcessionária || rec['Réu/Concessionária'] || '').toLowerCase();
-      const med = (rec.NúmerodoMedidor || '').toLowerCase();
-      return nome.includes(term) || proc.includes(term) || reu.includes(term) || med.includes(term);
-    });
-    setFilteredRecords(filtered);
-  }, [searchTerm, records]);
+    // 2. Search Term Filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(rec => {
+        const nome = (rec.NomedoAutor || '').toLowerCase();
+        const proc = (rec.NúmerodoProcesso || '').toLowerCase();
+        const reu = (rec.RéuConcessionária || rec['Réu/Concessionária'] || '').toLowerCase();
+        const med = (rec.NúmerodoMedidor || '').toLowerCase();
+        return nome.includes(term) || proc.includes(term) || reu.includes(term) || med.includes(term);
+      });
+    }
+
+    setFilteredRecords(result);
+  }, [searchTerm, dateFilterMode, selectedDate, records]);
+
+  // Count reports for today
+  const todayCount = records.filter(rec => {
+    const todayYMD = getTodayYMD();
+    return normalizeToYMD(rec.DatadaVistoria) === todayYMD || normalizeToYMD(rec.DatadeEnvio) === todayYMD;
+  }).length;
 
   // Fetch records from Google Apps Script
   const fetchRecords = async () => {
@@ -132,7 +201,7 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
 
       {/* Control Actions & Search */}
       <div className="card" style={{ padding: '20px', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '14px' }}>
           <div className="form-group" style={{ flexGrow: 1, marginBottom: 0, position: 'relative' }}>
             <span style={{ position: 'absolute', left: '0', top: '12px', color: 'var(--text-secondary)' }}>
               <Search size={16} />
@@ -158,8 +227,67 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
           </button>
         </div>
 
+        {/* Date Filter Section */}
+        <div style={{ paddingTop: '14px', borderTop: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Calendar size={13} style={{ color: 'var(--accent-gold)' }} />
+              Filtrar por Data
+            </span>
+            {dateFilterMode !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setDateFilterMode('all')}
+                style={{ background: 'none', border: 'none', fontSize: '0.75rem', color: 'var(--accent-gold)', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Limpar filtro
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setDateFilterMode('today')}
+              className={`btn ${dateFilterMode === 'today' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: '6px 12px', fontSize: '0.75rem', height: '34px', borderRadius: 'var(--radius-xs)', flexGrow: 0 }}
+            >
+              Hoje ({todayCount})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDateFilterMode('all')}
+              className={`btn ${dateFilterMode === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: '6px 12px', fontSize: '0.75rem', height: '34px', borderRadius: 'var(--radius-xs)', flexGrow: 0 }}
+            >
+              Todos ({records.length})
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexGrow: 1, minWidth: '140px' }}>
+              <input
+                type="date"
+                className="form-control"
+                value={selectedDate}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
+                  setDateFilterMode('custom');
+                }}
+                style={{
+                  height: '34px',
+                  padding: '4px 8px',
+                  fontSize: '0.8rem',
+                  borderRadius: 'var(--radius-xs)',
+                  border: dateFilterMode === 'custom' ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                  backgroundColor: dateFilterMode === 'custom' ? 'var(--accent-gold-light)' : 'transparent'
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
         {!isOnline && (
-          <p style={{ fontSize: '0.75rem', color: 'var(--accent-rust)', fontStyle: 'italic', textAlign: 'center' }}>
+          <p style={{ fontSize: '0.75rem', color: 'var(--accent-rust)', fontStyle: 'italic', textAlign: 'center', marginTop: '12px' }}>
             Modo offline - Exibindo dados do cache local. Conecte-se para atualizar.
           </p>
         )}
@@ -173,13 +301,20 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
         </div>
       )}
 
+      {/* Records Counter */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', padding: '0 4px' }}>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+          {filteredRecords.length === 1 ? '1 relatório encontrado' : `${filteredRecords.length} relatórios encontrados`}
+        </span>
+      </div>
+
       {/* Records List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {filteredRecords.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 16px', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
             <FileSpreadsheet size={32} style={{ color: 'var(--text-secondary)', marginBottom: '12px', marginInline: 'auto' }} />
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              {isLoading ? 'Carregando planilha...' : 'Nenhum relatório encontrado na nuvem.'}
+              {isLoading ? 'Carregando planilha...' : 'Nenhum relatório encontrado para o filtro selecionado.'}
             </p>
           </div>
         ) : (
@@ -196,15 +331,18 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
                 cursor: 'pointer' 
               }}
             >
-              <div style={{ paddingRight: '12px' }}>
+              <div style={{ paddingRight: '12px', flexGrow: 1 }}>
                 <h4 style={{ fontSize: '1.05rem', fontFamily: 'var(--font-serif)', marginBottom: '4px' }}>
                   {rec.NomedoAutor || 'Autor sem nome'}
                 </h4>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-primary)', marginBottom: '6px' }}>
                   Proc: {rec.NúmerodoProcesso || 'Não especificado'}
                 </p>
-                <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  <span>📅 {rec.DatadaVistoria || 'S/D'}</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  <span>📅 Vistoria: <strong>{cleanDateOnly(rec.DatadaVistoria)}</strong></span>
+                  {rec.DatadeEnvio && (
+                    <span>🕒 Envio: <strong>{rec.DatadeEnvio}</strong></span>
+                  )}
                   <span>⚡ {rec.TipodeAção || 'Consumo'}</span>
                 </div>
               </div>
@@ -286,7 +424,7 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
                 <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                   <Calendar size={12} /> DADOS DA VISTORIA
                 </span>
-                <p style={{ fontSize: '0.85rem', margin: '4px 0' }}><strong>Data da Vistoria:</strong> {selectedRecord.DatadaVistoria || 'Não informado'}</p>
+                <p style={{ fontSize: '0.85rem', margin: '4px 0' }}><strong>Data da Vistoria:</strong> {cleanDateOnly(selectedRecord.DatadaVistoria)}</p>
                 <p style={{ fontSize: '0.85rem', margin: '4px 0' }}><strong>Nº da Vistoria:</strong> {selectedRecord.NºdaVistoria || 'Não informado'}</p>
                 <p style={{ fontSize: '0.85rem', margin: '4px 0' }}><strong>Período:</strong> {selectedRecord.PeríododaVistoria || 'Não informado'}</p>
                 <p style={{ fontSize: '0.85rem', margin: '4px 0' }}><strong>Representante Autor:</strong> {selectedRecord['RepresentaçãoAutorPresente?'] || selectedRecord.RepresentaçãoAutorPresente || 'Não informado'}</p>
