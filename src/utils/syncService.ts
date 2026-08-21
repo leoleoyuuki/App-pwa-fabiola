@@ -21,9 +21,10 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 /**
- * Converts a Blob file to an optimized JPEG Base64 string for PDF printing (max 1200px, ~100KB).
+ * Converts a Blob file to an optimized high-resolution JPEG Base64 string for Google Drive (max 1920px, ~450KB).
+ * Preserves high forensic clarity while keeping the mobile network payload lightweight and reliable.
  */
-function resizeImageForPdf(blob: Blob, maxWidth = 1200, maxHeight = 1200): Promise<string> {
+function compressImageForDrive(blob: Blob, maxWidth = 1920, maxHeight = 1920, quality = 0.82): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -55,8 +56,57 @@ function resizeImageForPdf(blob: Blob, maxWidth = 1200, maxHeight = 1200): Promi
         }
 
         ctx.drawImage(img, 0, 0, width, height);
-        // JPEG 0.75 is crystal clear for PDF printing and keeps each photo ~100KB
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => {
+        blobToBase64(blob).then(resolve).catch(() => resolve(''));
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      blobToBase64(blob).then(resolve).catch(() => resolve(''));
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Converts a Blob file to an optimized JPEG Base64 string for PDF printing (max 900px, ~70KB).
+ */
+function resizeImageForPdf(blob: Blob, maxWidth = 900, maxHeight = 900): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(event.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
         resolve(dataUrl);
       };
       img.onerror = () => resolve(event.target?.result as string);
@@ -93,9 +143,9 @@ export async function syncInspection(
       onProgress({
         loaded: convertedCount,
         total: totalPhotos,
-        percentage: Math.round((convertedCount / totalPhotos) * 30)
+        percentage: Math.round((convertedCount / Math.max(1, totalPhotos)) * 30)
       });
-      const base64 = await blobToBase64(photo.original);
+      const base64 = await compressImageForDrive(photo.original);
       const pdfBase64 = await resizeImageForPdf(photo.original);
       photosImovelWithBase64.push({
         name: photo.name,
@@ -112,9 +162,9 @@ export async function syncInspection(
       onProgress({
         loaded: convertedCount,
         total: totalPhotos,
-        percentage: Math.round((convertedCount / totalPhotos) * 30)
+        percentage: Math.round((convertedCount / Math.max(1, totalPhotos)) * 30)
       });
-      const base64 = await blobToBase64(photo.original);
+      const base64 = await compressImageForDrive(photo.original);
       const pdfBase64 = await resizeImageForPdf(photo.original);
       photosMedidorWithBase64.push({
         name: photo.name,

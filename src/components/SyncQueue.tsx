@@ -14,10 +14,16 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Database,
-  DownloadCloud
+  DownloadCloud,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { auth } from '../utils/firebase';
 import { downloadAppForOffline, getOfflineStatus } from '../utils/offlineManager';
+import { parseSyncError } from '../utils/diagnosticHelper';
+import type { DiagnosticInfo } from '../utils/diagnosticHelper';
 
 interface SyncQueueProps {
   queue: InspectionData[];
@@ -43,6 +49,11 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Diagnostic states
+  const [diagnostic, setDiagnostic] = useState<DiagnosticInfo | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
+  const [showTechDetails, setShowTechDetails] = useState(false);
 
   // Offline pre-cache states
   const [offlineStatus, setOfflineStatus] = useState(getOfflineStatus);
@@ -74,6 +85,7 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
     isSyncingRef.current = true;
     setIsSyncing(true);
     setErrorMsg(null);
+    setDiagnostic(null);
     setSuccessMsg(null);
 
     let hasError = false;
@@ -102,6 +114,13 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
         refreshData();
       } catch (err: any) {
         hasError = true;
+        const diag = parseSyncError(
+          err,
+          inspection.nomeAutor,
+          inspection.photosImovel.length + inspection.photosMedidor.length,
+          inspection.numeroProcesso
+        );
+        setDiagnostic(diag);
         setErrorMsg(`Falha ao enviar "${inspection.nomeAutor}": ${err.message || err}`);
         break; // Stop sync queue on error
       } finally {
@@ -388,8 +407,102 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
           </div>
         )}
 
-        {/* Notifications */}
-        {errorMsg && (
+        {/* Rich Error Diagnostic Card */}
+        {diagnostic ? (
+          <div 
+            className="fade-in" 
+            style={{ 
+              backgroundColor: 'var(--accent-rust-light)', 
+              borderRadius: 'var(--radius-sm)', 
+              border: '1px solid rgba(184, 120, 120, 0.4)',
+              padding: '16px',
+              marginBottom: '16px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <AlertCircle size={18} style={{ color: 'var(--accent-rust)', flexShrink: 0 }} />
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--accent-rust)', margin: 0 }}>
+                {diagnostic.title}
+              </h4>
+            </div>
+
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)', marginBottom: '8px', lineHeight: '1.4' }}>
+              <strong>Motivo:</strong> {diagnostic.cause}
+            </div>
+
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: '1.4', backgroundColor: 'rgba(255,255,255,0.6)', padding: '8px', borderRadius: '4px' }}>
+              💡 <strong>O que fazer:</strong> {diagnostic.recommendation}
+            </div>
+
+            {/* Action buttons: Copy Diagnostic for WhatsApp */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  navigator.clipboard.writeText(diagnostic.technicalDetails);
+                  setIsCopied(true);
+                  setTimeout(() => setIsCopied(false), 3000);
+                }}
+                style={{ 
+                  padding: '6px 12px', 
+                  fontSize: '0.75rem', 
+                  height: '32px', 
+                  borderRadius: 'var(--radius-xs)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '6px', 
+                  backgroundColor: isCopied ? 'var(--accent-sage-light)' : '#fff',
+                  color: isCopied ? 'var(--accent-sage)' : 'var(--text-primary)',
+                  borderColor: isCopied ? 'var(--accent-sage)' : 'var(--border-color)',
+                  textTransform: 'none'
+                }}
+              >
+                {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                {isCopied ? 'Copiado para o WhatsApp!' : 'Copiar Diagnóstico para Suporte'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowTechDetails(!showTechDetails)}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  fontSize: '0.75rem', 
+                  color: 'var(--text-secondary)', 
+                  cursor: 'pointer', 
+                  textDecoration: 'underline',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '0 6px'
+                }}
+              >
+                {showTechDetails ? 'Ocultar detalhes' : 'Ver erro técnico'}
+                {showTechDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+            </div>
+
+            {/* Expandable Technical Log */}
+            {showTechDetails && (
+              <pre style={{ 
+                marginTop: '10px', 
+                padding: '10px', 
+                backgroundColor: 'rgba(0, 0, 0, 0.05)', 
+                borderRadius: '4px', 
+                fontSize: '0.7rem', 
+                color: 'var(--text-secondary)', 
+                whiteSpace: 'pre-wrap', 
+                wordBreak: 'break-all',
+                fontFamily: 'monospace',
+                maxHeight: '150px',
+                overflowY: 'auto'
+              }}>
+                {diagnostic.technicalDetails}
+              </pre>
+            )}
+          </div>
+        ) : errorMsg ? (
           <div style={{ 
             display: 'flex', 
             gap: '8px', 
@@ -404,7 +517,7 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
             <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
             <span>{errorMsg}</span>
           </div>
-        )}
+        ) : null}
 
         {successMsg && (
           <div style={{ 
