@@ -46,13 +46,35 @@ function App() {
     };
   }, []);
 
-  // Monitor auth state changes
+  // Monitor auth state changes with offline fallback
   useEffect(() => {
+    // Safety fallback: if offline or Firebase takes more than 1.2s to verify token, unlock UI for offline use
+    const offlineTimeout = setTimeout(() => {
+      const isCachedUser = localStorage.getItem('fabiola_user_logged_in') === 'true';
+      if (isCachedUser && !user) {
+        setUser(auth.currentUser || { email: 'perito@vistoriapro.com', uid: 'offline-user' });
+      }
+      setIsCheckingAuth(false);
+    }, 1200);
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+      clearTimeout(offlineTimeout);
+      if (currentUser) {
+        localStorage.setItem('fabiola_user_logged_in', 'true');
+        setUser(currentUser);
+      } else {
+        if (navigator.onLine) {
+          localStorage.removeItem('fabiola_user_logged_in');
+          setUser(null);
+        }
+      }
       setIsCheckingAuth(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      clearTimeout(offlineTimeout);
+      unsubscribe();
+    };
   }, []);
 
   // Fetch queue and history from IndexedDB
@@ -67,7 +89,7 @@ function App() {
     }
   };
 
-  // Initial load with brand exposure duration
+  // Initial load with brand exposure duration and background precache
   useEffect(() => {
     const init = async () => {
       await refreshData();
@@ -75,8 +97,8 @@ function App() {
         setFadeClass('fade-out');
         setTimeout(() => {
           setIsAppLoading(false);
-        }, 500); // Wait for CSS transition opacity to complete
-      }, 1200); // 1.2s of elegant brand logo exposure
+        }, 500);
+      }, 1000);
     };
     init();
   }, []);

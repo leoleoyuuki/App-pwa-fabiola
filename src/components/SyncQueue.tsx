@@ -13,9 +13,11 @@ import {
   Loader2, 
   CheckCircle2, 
   AlertCircle, 
-  Database
+  Database,
+  DownloadCloud
 } from 'lucide-react';
 import { auth } from '../utils/firebase';
+import { downloadAppForOffline, getOfflineStatus } from '../utils/offlineManager';
 
 interface SyncQueueProps {
   queue: InspectionData[];
@@ -41,6 +43,12 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Offline pre-cache states
+  const [offlineStatus, setOfflineStatus] = useState(getOfflineStatus);
+  const [isDownloadingOffline, setIsDownloadingOffline] = useState(false);
+  const [offlineProgressMsg, setOfflineProgressMsg] = useState('');
+  const [offlineProgressPct, setOfflineProgressPct] = useState(0);
 
   // Synchronous ref to prevent double-execution
   const isSyncingRef = useRef(false);
@@ -108,6 +116,27 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
     
     if (!hasError) {
       setSuccessMsg('Sincronização concluída com sucesso!');
+    }
+  };
+
+  const handleDownloadOffline = async () => {
+    setIsDownloadingOffline(true);
+    setOfflineProgressMsg('Iniciando download...');
+    setOfflineProgressPct(0);
+
+    const result = await downloadAppForOffline(webhookUrl, (msg, pct) => {
+      setOfflineProgressMsg(msg);
+      setOfflineProgressPct(pct);
+    });
+
+    setIsDownloadingOffline(false);
+    setOfflineStatus(getOfflineStatus());
+
+    if (result.success) {
+      setSuccessMsg(`✅ ${result.message} (${result.fileCount} recursos em cache)`);
+      setTimeout(() => setSuccessMsg(null), 5000);
+    } else {
+      setErrorMsg(result.message);
     }
   };
 
@@ -226,6 +255,96 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
                 </button>
               )}
             </div>
+
+            {/* Offline Pre-cache Control inside Settings */}
+            <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid rgba(239, 239, 234, 0.5)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <DownloadCloud size={18} style={{ color: 'var(--accent-gold)' }} />
+                  <div>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      Pre-Cache para Uso em Campo
+                    </span>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      {offlineStatus.isReady 
+                        ? `Último download: ${offlineStatus.lastDownloadedAt}` 
+                        : 'Baixe arquivos e agenda para navegar sem sinal'}
+                    </p>
+                  </div>
+                </div>
+                {offlineStatus.isReady && (
+                  <span style={{ fontSize: '0.7rem', color: 'var(--accent-sage)', fontWeight: 600, backgroundColor: 'var(--accent-sage-light)', padding: '2px 8px', borderRadius: '12px' }}>
+                    Pronto
+                  </span>
+                )}
+              </div>
+
+              {isDownloadingOffline ? (
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    <span>{offlineProgressMsg}</span>
+                    <span>{offlineProgressPct}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: `${offlineProgressPct}%`, height: '100%', backgroundColor: 'var(--accent-gold)', transition: 'width 0.2s ease' }} />
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleDownloadOffline}
+                  disabled={isDownloadingOffline || !isOnline}
+                  style={{ width: '100%', marginTop: '8px', fontSize: '0.75rem', height: '34px', display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center', textTransform: 'none' }}
+                >
+                  <DownloadCloud size={14} />
+                  {offlineStatus.isReady ? 'Atualizar Cache Offline' : 'Baixar Aplicativo para Uso Offline'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Offline Quick Badge / Precache Trigger when Offline Ready status is displayed */}
+        {!showSettings && (
+          <div style={{ 
+            marginBottom: '16px', 
+            padding: '10px 14px', 
+            backgroundColor: offlineStatus.isReady ? 'var(--accent-sage-light)' : 'var(--accent-gold-light)', 
+            borderRadius: 'var(--radius-sm)',
+            border: `1px solid ${offlineStatus.isReady ? 'rgba(143, 151, 121, 0.4)' : 'var(--accent-gold)'}`,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <DownloadCloud size={16} style={{ color: offlineStatus.isReady ? 'var(--accent-sage)' : 'var(--accent-gold)' }} />
+              <div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {offlineStatus.isReady ? 'Modo Offline: 100% Pronto' : 'Baixar Modo Offline'}
+                </span>
+                <p style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  {offlineStatus.isReady ? `Atualizado em ${offlineStatus.lastDownloadedAt}` : 'Toque para salvar o app e usar sem sinal'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleDownloadOffline}
+              disabled={isDownloadingOffline || !isOnline}
+              style={{ 
+                padding: '4px 10px', 
+                fontSize: '0.7rem', 
+                height: '28px', 
+                textTransform: 'none', 
+                borderRadius: 'var(--radius-xs)',
+                flexShrink: 0
+              }}
+            >
+              {isDownloadingOffline ? <Loader2 size={12} className="spin" /> : offlineStatus.isReady ? 'Atualizar' : 'Baixar'}
+            </button>
           </div>
         )}
 
