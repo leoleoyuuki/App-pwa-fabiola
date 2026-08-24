@@ -22,8 +22,8 @@ var CONFIG_PERITOS = {
   },
   "leok.perito@gmail.com": {
     nome: "Leo K.",
-    spreadsheetId: "1FN7kF425xtjcwKN7_IXChw1mw5Qkt4vfEKW_vs8s-jg",
-    mainFolderId: "1utF69gWlshwlHfQUXxQ8gskLC8bRo4e0"
+    spreadsheetId: "1dC4Yn6XSmEOBBraiTAWUMqUuYzmpZkXx84Ert6fgZcA",
+    mainFolderId: "1O-9Xu0tLGZBjmFY8YkL0jzPy2vS6KFR7"
   }
 };
 
