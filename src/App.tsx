@@ -77,17 +77,33 @@ function App() {
     };
   }, []);
 
-  // Fetch queue and history from IndexedDB
+  // Helper to format perito display badge
+  const getPeritoDisplayName = (email?: string): string => {
+    if (!email) return 'Perito';
+    const clean = email.toLowerCase().trim();
+    if (clean === 'rodrigues.periciajud@gmail.com') return 'Perito: Rodrigues';
+    if (clean === 'leok.perito@gmail.com') return 'Perito: Leo K.';
+    return `Perito: ${email.split('@')[0]}`;
+  };
+
+  // Fetch queue and history from IndexedDB (isolated per perito)
   const refreshData = async () => {
     try {
-      const q = await db.getQueue();
-      const h = await db.getHistory();
+      const q = await db.getQueue(user?.email);
+      const h = await db.getHistory(user?.email);
       setQueue(q);
       setHistory(h);
     } catch (err) {
       console.error('Erro ao ler do IndexedDB:', err);
     }
   };
+
+  // Re-fetch queue and history whenever user changes
+  useEffect(() => {
+    if (user?.email) {
+      refreshData();
+    }
+  }, [user?.email]);
 
   // Initial load with brand exposure duration and background precache
   useEffect(() => {
@@ -170,12 +186,17 @@ function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span 
               style={{ 
-                fontSize: '0.75rem', 
-                color: 'var(--text-secondary)',
-                fontWeight: 400
+                fontSize: '0.72rem', 
+                backgroundColor: 'var(--accent-gold-light)',
+                color: 'var(--accent-gold-hover)',
+                border: '1px solid var(--accent-gold)',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                fontWeight: 600,
+                letterSpacing: '0.02em'
               }}
             >
-              Arquiteta & Designer
+              {getPeritoDisplayName(user?.email)}
             </span>
           </div>
         </div>
@@ -187,11 +208,13 @@ function App() {
           <InspectionForm 
             onInspectionAdded={refreshData} 
             isOnline={isOnline}
+            userEmail={user?.email}
           />
         ) : activeTab === 'records' ? (
           <CloudHistory 
             webhookUrl={webhookUrl}
             isOnline={isOnline}
+            userEmail={user?.email}
           />
         ) : (
           <SyncQueue 
@@ -201,6 +224,7 @@ function App() {
             webhookUrl={webhookUrl}
             setWebhookUrl={setWebhookUrl}
             isOnline={isOnline}
+            userEmail={user?.email}
           />
         )}
       </main>

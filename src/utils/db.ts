@@ -27,6 +27,7 @@ export interface PhotoData {
 export interface InspectionData {
   id: string;
   createdAt: string;
+  peritoEmail?: string;
   nomeAutor: string;
   numeroProcesso: string;
   reuConcessionaria: string;
@@ -62,6 +63,7 @@ export interface HistoryItem {
   id: string;
   createdAt: string;
   syncedAt: string;
+  peritoEmail?: string;
   clientName: string;
   projectAddress: string;
   inspectorName: string;
@@ -75,16 +77,23 @@ const cacheStore = localforage.createInstance({
 
 export const db = {
   // --- Draft Management ---
-  async saveDraft(data: Omit<InspectionData, 'id' | 'createdAt'>): Promise<void> {
-    await draftStore.setItem('current_draft', data);
+  async saveDraft(data: Omit<InspectionData, 'id' | 'createdAt'>, peritoEmail?: string): Promise<void> {
+    const key = peritoEmail ? `draft_${peritoEmail}` : 'current_draft';
+    await draftStore.setItem(key, data);
   },
 
-  async getDraft(): Promise<Omit<InspectionData, 'id' | 'createdAt'> | null> {
-    return await draftStore.getItem<Omit<InspectionData, 'id' | 'createdAt'>>('current_draft');
+  async getDraft(peritoEmail?: string): Promise<Omit<InspectionData, 'id' | 'createdAt'> | null> {
+    const key = peritoEmail ? `draft_${peritoEmail}` : 'current_draft';
+    const draft = await draftStore.getItem<Omit<InspectionData, 'id' | 'createdAt'>>(key);
+    if (!draft && peritoEmail) {
+      return await draftStore.getItem<Omit<InspectionData, 'id' | 'createdAt'>>('current_draft');
+    }
+    return draft;
   },
 
-  async clearDraft(): Promise<void> {
-    await draftStore.removeItem('current_draft');
+  async clearDraft(peritoEmail?: string): Promise<void> {
+    const key = peritoEmail ? `draft_${peritoEmail}` : 'current_draft';
+    await draftStore.removeItem(key);
   },
 
   // --- Sync Queue (Pending Uploads) ---
@@ -92,12 +101,16 @@ export const db = {
     await queueStore.setItem(inspection.id, inspection);
   },
 
-  async getQueue(): Promise<InspectionData[]> {
+  async getQueue(peritoEmail?: string): Promise<InspectionData[]> {
     const keys = await queueStore.keys();
-    const items: InspectionData[] = [];
+    let items: InspectionData[] = [];
     for (const key of keys) {
       const item = await queueStore.getItem<InspectionData>(key);
-      if (item) items.push(item);
+      if (item) {
+        if (!peritoEmail || !item.peritoEmail || item.peritoEmail === peritoEmail) {
+          items.push(item);
+        }
+      }
     }
     // Sort oldest first for FIFO syncing
     return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -113,6 +126,7 @@ export const db = {
       id: inspection.id,
       createdAt: inspection.createdAt,
       syncedAt: new Date().toISOString(),
+      peritoEmail: inspection.peritoEmail,
       clientName: inspection.nomeAutor,
       projectAddress: inspection.numeroProcesso || 'S/N',
       inspectorName: inspection.tipoAcao,
@@ -121,32 +135,48 @@ export const db = {
     await historyStore.setItem(inspection.id, historyItem);
   },
 
-  async getHistory(): Promise<HistoryItem[]> {
+  async getHistory(peritoEmail?: string): Promise<HistoryItem[]> {
     const keys = await historyStore.keys();
-    const items: HistoryItem[] = [];
+    let items: HistoryItem[] = [];
     for (const key of keys) {
       const item = await historyStore.getItem<HistoryItem>(key);
-      if (item) items.push(item);
+      if (item) {
+        if (!peritoEmail || !item.peritoEmail || item.peritoEmail === peritoEmail) {
+          items.push(item);
+        }
+      }
     }
     // Sort newest first
     return items.sort((a, b) => new Date(b.syncedAt).getTime() - new Date(a.syncedAt).getTime());
   },
 
   // --- Cached Cloud Records from Google Sheets ---
-  async saveCloudRecords(records: any[]): Promise<void> {
-    await cacheStore.setItem('cloud_records', records);
+  async saveCloudRecords(records: any[], peritoEmail?: string): Promise<void> {
+    const key = peritoEmail ? `cloud_records_${peritoEmail}` : 'cloud_records';
+    await cacheStore.setItem(key, records);
   },
 
-  async getCloudRecords(): Promise<any[] | null> {
-    return await cacheStore.getItem<any[]>('cloud_records');
+  async getCloudRecords(peritoEmail?: string): Promise<any[] | null> {
+    const key = peritoEmail ? `cloud_records_${peritoEmail}` : 'cloud_records';
+    const data = await cacheStore.getItem<any[]>(key);
+    if (!data && peritoEmail) {
+      return await cacheStore.getItem<any[]>('cloud_records');
+    }
+    return data;
   },
 
   // --- Offline-Cached Scheduled Cases (Processos Cadastrados) ---
-  async saveScheduledProcesses(processes: any[]): Promise<void> {
-    await cacheStore.setItem('scheduled_processes', processes);
+  async saveScheduledProcesses(processes: any[], peritoEmail?: string): Promise<void> {
+    const key = peritoEmail ? `scheduled_processes_${peritoEmail}` : 'scheduled_processes';
+    await cacheStore.setItem(key, processes);
   },
 
-  async getScheduledProcesses(): Promise<any[] | null> {
-    return await cacheStore.getItem<any[]>('scheduled_processes');
+  async getScheduledProcesses(peritoEmail?: string): Promise<any[] | null> {
+    const key = peritoEmail ? `scheduled_processes_${peritoEmail}` : 'scheduled_processes';
+    const data = await cacheStore.getItem<any[]>(key);
+    if (!data && peritoEmail) {
+      return await cacheStore.getItem<any[]>('scheduled_processes');
+    }
+    return data;
   }
 };

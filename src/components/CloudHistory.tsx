@@ -20,11 +20,13 @@ import {
 interface CloudHistoryProps {
   webhookUrl: string;
   isOnline: boolean;
+  userEmail?: string;
 }
 
 export const CloudHistory: React.FC<CloudHistoryProps> = ({
   webhookUrl,
-  isOnline
+  isOnline,
+  userEmail
 }) => {
   const [records, setRecords] = useState<any[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<any[]>([]);
@@ -79,11 +81,11 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
     return '';
   };
 
-  // Load cached records on mount
+  // Load cached records on mount or user change
   useEffect(() => {
     const loadCached = async () => {
       try {
-        const cached = await db.getCloudRecords();
+        const cached = await db.getCloudRecords(userEmail);
         if (cached) {
           setRecords(cached);
           setFilteredRecords(cached);
@@ -97,7 +99,7 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
     if (isOnline && webhookUrl && webhookUrl.includes('script.google.com')) {
       fetchRecords();
     }
-  }, [webhookUrl, isOnline]);
+  }, [webhookUrl, isOnline, userEmail]);
 
   // Filter records dynamically when search term, date filter, or records change
   useEffect(() => {
@@ -151,7 +153,8 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
     setErrorMsg(null);
 
     try {
-      const response = await fetch(webhookUrl, { method: 'GET' });
+      const peritoQuery = userEmail ? `?perito=${encodeURIComponent(userEmail)}` : '';
+      const response = await fetch(`${webhookUrl}${peritoQuery}`, { method: 'GET' });
       if (!response.ok) {
         throw new Error(`Erro HTTP: Status ${response.status}`);
       }
@@ -167,7 +170,7 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
         const sorted = [...data].reverse();
         setRecords(sorted);
         setFilteredRecords(sorted);
-        await db.saveCloudRecords(sorted); // Cache locally
+        await db.saveCloudRecords(sorted, userEmail); // Cache locally per perito
       } else {
         throw new Error('Formato de resposta inesperado do Google Script.');
       }
@@ -176,7 +179,7 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
       setErrorMsg(`Erro de conexão: ${err.message || err}`);
       
       // Load cache if fetch fails
-      const cached = await db.getCloudRecords();
+      const cached = await db.getCloudRecords(userEmail);
       if (cached) {
         setRecords(cached);
         setFilteredRecords(cached);

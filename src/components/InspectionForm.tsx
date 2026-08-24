@@ -24,6 +24,7 @@ import {
 interface InspectionFormProps {
   onInspectionAdded: () => void;
   isOnline: boolean;
+  userEmail?: string;
 }
 
 function getTodayDateString(): string {
@@ -69,7 +70,8 @@ function formatDisplayDate(dateStr: string): string {
 
 export const InspectionForm: React.FC<InspectionFormProps> = ({
   onInspectionAdded,
-  isOnline
+  isOnline,
+  userEmail
 }) => {
   // Form fields
   const [nomeAutor, setNomeAutor] = useState('');
@@ -125,11 +127,11 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   const cameraMedidorRef = useRef<HTMLInputElement>(null);
   const galleryMedidorRef = useRef<HTMLInputElement>(null);
 
-  // Load scheduled processes from IndexedDB cache on mount
+  // Load scheduled processes from IndexedDB cache on mount or user change
   useEffect(() => {
     const loadProcesses = async () => {
       try {
-        const cached = await db.getScheduledProcesses();
+        const cached = await db.getScheduledProcesses(userEmail);
         if (cached) {
           setScheduledProcesses(cached);
         }
@@ -138,7 +140,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
       }
     };
     loadProcesses();
-  }, []);
+  }, [userEmail]);
 
   // Fetch scheduled processes list from the Google Sheets Web App
   const handleSyncProcesses = async () => {
@@ -154,12 +156,13 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     setSyncSuccess(null);
     
     try {
-      const response = await fetch(`${webhookUrl}?action=processos`, { method: 'GET' });
+      const peritoQuery = userEmail ? `&perito=${encodeURIComponent(userEmail)}` : '';
+      const response = await fetch(`${webhookUrl}?action=processos${peritoQuery}`, { method: 'GET' });
       if (!response.ok) throw new Error(`HTTP: ${response.status}`);
       const data = await response.json();
       if (Array.isArray(data)) {
         setScheduledProcesses(data);
-        await db.saveScheduledProcesses(data);
+        await db.saveScheduledProcesses(data, userEmail);
         setSyncSuccess(`Sincronizado: ${data.length} cadastros salvos!`);
         setTimeout(() => setSyncSuccess(null), 3000);
       } else {
@@ -173,10 +176,12 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
       setIsSyncingProcesses(false);
     }
   };
+
+  // Load draft on mount or user change
   useEffect(() => {
     const loadDraft = async () => {
       try {
-        const draft = await db.getDraft();
+        const draft = await db.getDraft(userEmail);
         if (draft) {
           setNomeAutor(draft.nomeAutor || '');
           setNumeroProcesso(draft.numeroProcesso || '');
@@ -214,7 +219,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
       }
     };
     loadDraft();
-  }, []);
+  }, [userEmail]);
 
   // Autosave draft on field changes
   useEffect(() => {
@@ -254,7 +259,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
           observacoesFinais,
           photosImovel,
           photosMedidor
-        });
+        }, userEmail);
         const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         setDraftSavedAt(`Rascunho salvo às ${now}`);
       } catch (err) {
@@ -271,7 +276,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     corteEnergia, qtdPessoas, qtdComodos, numLampadas, numTvs,
     numVentiladores, numVentiladoresTeto, numArCondicionados, numGeladeiras,
     numChuveiros, numMaquinasLavar, numFreezers, checklist, observacoesFinais,
-    photosImovel, photosMedidor
+    photosImovel, photosMedidor, userEmail
   ]);
 
   // Handle Photo input (Camera and Gallery share this)
@@ -342,6 +347,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     const inspection: InspectionData = {
       id: `insp-${Date.now()}`,
       createdAt: new Date().toISOString(),
+      peritoEmail: userEmail,
       nomeAutor: nomeAutor.trim(),
       numeroProcesso: numeroProcesso.trim(),
       reuConcessionaria: reuConcessionaria.trim(),
@@ -375,7 +381,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
 
     try {
       await db.addToQueue(inspection);
-      await db.clearDraft();
+      await db.clearDraft(userEmail);
       
       // Clear form states
       setNomeAutor('');

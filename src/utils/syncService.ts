@@ -178,6 +178,7 @@ export async function syncInspection(
     const payload = {
       id: inspection.id,
       createdAt: inspection.createdAt,
+      peritoEmail: inspection.peritoEmail || '',
       nomeAutor: inspection.nomeAutor,
       numeroProcesso: inspection.numeroProcesso,
       reuConcessionaria: inspection.reuConcessionaria,

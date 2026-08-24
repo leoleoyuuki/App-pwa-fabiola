@@ -33,7 +33,8 @@ export function getOfflineStatus(): OfflineStatus {
  */
 export async function downloadAppForOffline(
   webhookUrl: string,
-  onProgress?: (status: string, percent: number) => void
+  onProgress?: (status: string, percent: number) => void,
+  peritoEmail?: string
 ): Promise<PrecacheResult> {
   try {
     onProgress?.('Iniciando preparação para uso offline...', 10);
@@ -98,11 +99,12 @@ export async function downloadAppForOffline(
       try {
         const types = ['energia', 'agua', 'imobiliario', 'gas'];
         for (const t of types) {
-          const response = await fetch(`${webhookUrl}?action=processos&tipo=${t}`);
+          const peritoQuery = peritoEmail ? `&perito=${encodeURIComponent(peritoEmail)}` : '';
+          const response = await fetch(`${webhookUrl}?action=processos&tipo=${t}${peritoQuery}`);
           if (response.ok) {
             const data = await response.json();
             if (Array.isArray(data) && data.length > 0) {
-              await db.saveScheduledProcesses(data);
+              await db.saveScheduledProcesses(data, peritoEmail);
             }
           }
         }

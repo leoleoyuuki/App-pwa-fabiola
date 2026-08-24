@@ -32,6 +32,7 @@ interface SyncQueueProps {
   webhookUrl: string;
   setWebhookUrl: (url: string) => void;
   isOnline: boolean;
+  userEmail?: string;
 }
 
 export const SyncQueue: React.FC<SyncQueueProps> = ({
@@ -40,7 +41,8 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
   refreshData,
   webhookUrl,
   setWebhookUrl,
-  isOnline
+  isOnline,
+  userEmail
 }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [isEditingWebhook, setIsEditingWebhook] = useState(false);
@@ -146,7 +148,7 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
     const result = await downloadAppForOffline(webhookUrl, (msg, pct) => {
       setOfflineProgressMsg(msg);
       setOfflineProgressPct(pct);
-    });
+    }, userEmail);
 
     setIsDownloadingOffline(false);
     setOfflineStatus(getOfflineStatus());
