@@ -16,6 +16,11 @@ const historyStore = localforage.createInstance({
   storeName: 'history'
 });
 
+const cacheStore = localforage.createInstance({
+  name: 'fabiola_inspection',
+  storeName: 'cache'
+});
+
 export interface PhotoData {
   id: string;
   name: string;
@@ -42,6 +47,7 @@ export interface InspectionData {
   medidorChip: string;
   condicoesMedidor: string;
   corteEnergia: string;
+  observacoesMedidor?: string;
   qtdPessoas: string;
   qtdComodos: string;
   numLampadas: string;
@@ -59,6 +65,11 @@ export interface InspectionData {
   photosMedidor: PhotoData[];
 }
 
+export interface DraftData extends Omit<InspectionData, 'id' | 'createdAt'> {
+  id: string;
+  updatedAt: string;
+}
+
 export interface HistoryItem {
   id: string;
   createdAt: string;
@@ -70,30 +81,92 @@ export interface HistoryItem {
   photoCount: number;
 }
 
-const cacheStore = localforage.createInstance({
-  name: 'fabiola_inspection',
-  storeName: 'cache'
-});
-
 export const db = {
-  // --- Draft Management ---
-  async saveDraft(data: Omit<InspectionData, 'id' | 'createdAt'>, peritoEmail?: string): Promise<void> {
-    const key = peritoEmail ? `draft_${peritoEmail}` : 'current_draft';
-    await draftStore.setItem(key, data);
+  // --- Draft Management (Multi-draft with real-time autosave) ---
+  async saveDraft(data: DraftData, peritoEmail?: string): Promise<void> {
+    const draftKey = `draft_${data.id}`;
+    const email = peritoEmail || data.peritoEmail || '';
+    const draftToSave: DraftData = {
+      ...data,
+      peritoEmail: email,
+      updatedAt: data.updatedAt || new Date().toISOString()
+    };
+    
+    // Save the specific draft
+    await draftStore.setItem(draftKey, draftToSave);
+    
+    // Track active draft for this perito
+    const activeKey = email ? `active_draft_${email}` : 'active_draft';
+    await draftStore.setItem(activeKey, data.id);
   },
 
-  async getDraft(peritoEmail?: string): Promise<Omit<InspectionData, 'id' | 'createdAt'> | null> {
-    const key = peritoEmail ? `draft_${peritoEmail}` : 'current_draft';
-    const draft = await draftStore.getItem<Omit<InspectionData, 'id' | 'createdAt'>>(key);
-    if (!draft && peritoEmail) {
-      return await draftStore.getItem<Omit<InspectionData, 'id' | 'createdAt'>>('current_draft');
+  async getAllDrafts(peritoEmail?: string): Promise<DraftData[]> {
+    const keys = await draftStore.keys();
+    const drafts: DraftData[] = [];
+    
+    for (const key of keys) {
+      if (key.startsWith('draft_')) {
+        const draft = await draftStore.getItem<DraftData>(key);
+        if (draft && draft.id) {
+          if (!peritoEmail || !draft.peritoEmail || draft.peritoEmail === peritoEmail) {
+            drafts.push(draft);
+          }
+        }
+      }
     }
-    return draft;
+    
+    // Sort newest updated first
+    return drafts.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
   },
 
-  async clearDraft(peritoEmail?: string): Promise<void> {
-    const key = peritoEmail ? `draft_${peritoEmail}` : 'current_draft';
-    await draftStore.removeItem(key);
+  async getActiveDraft(peritoEmail?: string): Promise<DraftData | null> {
+    const activeKey = peritoEmail ? `active_draft_${peritoEmail}` : 'active_draft';
+    const activeId = await draftStore.getItem<string>(activeKey);
+    
+    if (activeId) {
+      const draft = await draftStore.getItem<DraftData>(`draft_${activeId}`);
+      if (draft) return draft;
+    }
+    
+    // Fallback: check legacy draft key
+    const legacyKey = peritoEmail ? `draft_${peritoEmail}` : 'current_draft';
+    const legacyDraft = await draftStore.getItem<any>(legacyKey);
+    if (legacyDraft && !legacyDraft.id) {
+      const migratedDraft: DraftData = {
+        ...legacyDraft,
+        id: `draft_${Date.now()}`,
+        updatedAt: new Date().toISOString(),
+        peritoEmail: peritoEmail
+      };
+      await this.saveDraft(migratedDraft, peritoEmail);
+      await draftStore.removeItem(legacyKey);
+      return migratedDraft;
+    }
+    
+    return null;
+  },
+
+  async getDraftById(id: string): Promise<DraftData | null> {
+    return await draftStore.getItem<DraftData>(`draft_${id}`);
+  },
+
+  async setActiveDraft(id: string, peritoEmail?: string): Promise<void> {
+    const activeKey = peritoEmail ? `active_draft_${peritoEmail}` : 'active_draft';
+    await draftStore.setItem(activeKey, id);
+  },
+
+  async deleteDraft(id: string, peritoEmail?: string): Promise<void> {
+    await draftStore.removeItem(`draft_${id}`);
+    const activeKey = peritoEmail ? `active_draft_${peritoEmail}` : 'active_draft';
+    const currentActiveId = await draftStore.getItem<string>(activeKey);
+    if (currentActiveId === id) {
+      await draftStore.removeItem(activeKey);
+    }
+  },
+
+  async clearActiveDraft(peritoEmail?: string): Promise<void> {
+    const activeKey = peritoEmail ? `active_draft_${peritoEmail}` : 'active_draft';
+    await draftStore.removeItem(activeKey);
   },
 
   // --- Sync Queue (Pending Uploads) ---

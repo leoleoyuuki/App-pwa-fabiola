@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
 import { db } from './utils/db';
-import type { InspectionData, HistoryItem } from './utils/db';
+import type { InspectionData, HistoryItem, DraftData } from './utils/db';
 import { InspectionForm } from './components/InspectionForm';
 import { SyncQueue } from './components/SyncQueue';
-import { ClipboardList, Send, FileSpreadsheet } from 'lucide-react';
+import { ClipboardList, Send, FileSpreadsheet, FileEdit } from 'lucide-react';
 import { CloudHistory } from './components/CloudHistory';
+import { DraftsList } from './components/DraftsList';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './utils/firebase';
 import { Login } from './components/Login';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'form' | 'queue' | 'records'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'drafts' | 'queue' | 'records'>('form');
   const [queue, setQueue] = useState<InspectionData[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [draftsCount, setDraftsCount] = useState<number>(0);
+  const [loadedDraft, setLoadedDraft] = useState<DraftData | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   // Loading states
@@ -86,16 +89,30 @@ function App() {
     return `Perito: ${email.split('@')[0]}`;
   };
 
-  // Fetch queue and history from IndexedDB (isolated per perito)
+  // Fetch queue, history and drafts from IndexedDB (isolated per perito)
   const refreshData = async () => {
     try {
       const q = await db.getQueue(user?.email);
       const h = await db.getHistory(user?.email);
+      const d = await db.getAllDrafts(user?.email);
       setQueue(q);
       setHistory(h);
+      setDraftsCount(d.length);
     } catch (err) {
       console.error('Erro ao ler do IndexedDB:', err);
     }
+  };
+
+  // Handler when user clicks on a saved draft from the Drafts tab
+  const handleSelectDraft = (draft: DraftData) => {
+    setLoadedDraft(draft);
+    setActiveTab('form');
+  };
+
+  // Handler when user starts a fresh inspection
+  const handleNewInspection = () => {
+    setLoadedDraft(null);
+    setActiveTab('form');
   };
 
   // Re-fetch queue and history whenever user changes
@@ -187,7 +204,7 @@ function App() {
             <span 
               style={{ 
                 fontSize: '0.72rem', 
-                backgroundColor: 'var(--accent-gold-light)',
+                backgroundColor: 'var(--accent-gold-light)', 
                 color: 'var(--accent-gold-hover)',
                 border: '1px solid var(--accent-gold)',
                 padding: '4px 10px',
@@ -209,6 +226,17 @@ function App() {
             onInspectionAdded={refreshData} 
             isOnline={isOnline}
             userEmail={user?.email}
+            loadedDraft={loadedDraft}
+            onClearLoadedDraft={() => {
+              setLoadedDraft(null);
+              refreshData();
+            }}
+          />
+        ) : activeTab === 'drafts' ? (
+          <DraftsList 
+            userEmail={user?.email}
+            onSelectDraft={handleSelectDraft}
+            onNewInspection={handleNewInspection}
           />
         ) : activeTab === 'records' ? (
           <CloudHistory 
@@ -259,12 +287,61 @@ function App() {
             gap: '4px',
             color: activeTab === 'form' ? 'var(--accent-gold)' : 'var(--text-secondary)',
             cursor: 'pointer',
-            padding: '8px 16px',
+            padding: '8px 12px',
             transition: 'var(--transition)'
           }}
         >
           <ClipboardList size={22} style={{ strokeWidth: activeTab === 'form' ? 2.5 : 2 }} />
-          <span style={{ fontSize: '0.75rem', fontWeight: activeTab === 'form' ? 600 : 400 }}>Inspeção</span>
+          <span style={{ fontSize: '0.72rem', fontWeight: activeTab === 'form' ? 600 : 400 }}>Inspeção</span>
+        </button>
+
+        {/* Drafts Tab Button with Badge */}
+        <button
+          onClick={() => {
+            refreshData();
+            setActiveTab('drafts');
+          }}
+          style={{
+            background: 'none',
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            color: activeTab === 'drafts' ? 'var(--accent-gold)' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            padding: '8px 12px',
+            position: 'relative',
+            transition: 'var(--transition)'
+          }}
+        >
+          <FileEdit size={22} style={{ strokeWidth: activeTab === 'drafts' ? 2.5 : 2 }} />
+          <span style={{ fontSize: '0.72rem', fontWeight: activeTab === 'drafts' ? 600 : 400 }}>Rascunhos</span>
+          
+          {/* Badge for saved drafts */}
+          {draftsCount > 0 && (
+            <span 
+              style={{
+                position: 'absolute',
+                top: '4px',
+                right: '12px',
+                backgroundColor: 'var(--accent-gold)',
+                color: 'var(--bg-primary)',
+                fontSize: '0.62rem',
+                fontWeight: 'bold',
+                borderRadius: '50%',
+                minWidth: '16px',
+                height: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 3px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}
+            >
+              {draftsCount}
+            </span>
+          )}
         </button>
 
         {/* Cloud Records Tab Button */}
@@ -279,12 +356,12 @@ function App() {
             gap: '4px',
             color: activeTab === 'records' ? 'var(--accent-gold)' : 'var(--text-secondary)',
             cursor: 'pointer',
-            padding: '8px 16px',
+            padding: '8px 12px',
             transition: 'var(--transition)'
           }}
         >
           <FileSpreadsheet size={22} style={{ strokeWidth: activeTab === 'records' ? 2.5 : 2 }} />
-          <span style={{ fontSize: '0.75rem', fontWeight: activeTab === 'records' ? 600 : 400 }}>Relatórios</span>
+          <span style={{ fontSize: '0.72rem', fontWeight: activeTab === 'records' ? 600 : 400 }}>Relatórios</span>
         </button>
 
         {/* Sync Tab Button with Badge */}
@@ -299,13 +376,13 @@ function App() {
             gap: '4px',
             color: activeTab === 'queue' ? 'var(--accent-gold)' : 'var(--text-secondary)',
             cursor: 'pointer',
-            padding: '8px 16px',
+            padding: '8px 12px',
             position: 'relative',
             transition: 'var(--transition)'
           }}
         >
           <Send size={22} style={{ strokeWidth: activeTab === 'queue' ? 2.5 : 2 }} />
-          <span style={{ fontSize: '0.75rem', fontWeight: activeTab === 'queue' ? 600 : 400 }}>Sincronizar</span>
+          <span style={{ fontSize: '0.72rem', fontWeight: activeTab === 'queue' ? 600 : 400 }}>Sincronizar</span>
           
           {/* Badge for pending queue items */}
           {queue.length > 0 && (
@@ -313,18 +390,18 @@ function App() {
               style={{
                 position: 'absolute',
                 top: '4px',
-                right: '18px',
+                right: '12px',
                 backgroundColor: 'var(--accent-gold)',
                 color: 'var(--bg-primary)',
-                fontSize: '0.65rem',
+                fontSize: '0.62rem',
                 fontWeight: 'bold',
                 borderRadius: '50%',
-                minWidth: '18px',
-                height: '18px',
+                minWidth: '16px',
+                height: '16px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '0 4px',
+                padding: '0 3px',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
               }}
             >

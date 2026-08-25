@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arquitetura de Automação do Laudo Pericial | VistoriaPro</title>
+  
+  <!-- Fonts Google -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+  <!-- Mermaid.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FFFFFF',
+        primaryTextColor: '#181817',
+        primaryBorderColor: '#BFAA8F',
+        lineColor: '#917B60',
+        secondaryColor: '#F7F5F2',
+        tertiaryColor: '#EEF4F8',
+        fontFamily: 'Outfit, sans-serif',
+        fontSize: '14px',
+        edgeLabelBackground: '#FFFFFF',
+        clusterBkg: '#FAFAF8',
+        clusterBorder: '#D4D0C7'
+      }
+    });
+  </script>
+
+  <style>
+    :root {
+      --bg-primary: #F8F7F4;
+      --bg-card: #FFFFFF;
+      --text-primary: #181817;
+      --text-secondary: #555552;
+      --text-muted: #888884;
+      --accent-gold: #BFAA8F;
+      --accent-gold-dark: #917B60;
+      --accent-gold-light: #F7F5F2;
+      --accent-blue: #2E5A88;
+      --accent-blue-light: #EEF4F8;
+      --accent-sage: #5A7545;
+      --accent-sage-light: #EFF5EB;
+      --border-color: #E2DFD7;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow: 0 4px 20px rgba(24, 24, 23, 0.04);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      padding: 32px 24px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      margin-bottom: 32px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-badge {
+      display: inline-block;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.75rem;
+      color: var(--accent-gold-dark);
+      background: var(--accent-gold-light);
+      border: 1px solid var(--accent-gold);
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .header-desc {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      max-width: 800px;
+      font-weight: 300;
+      margin-top: 4px;
+    }
+
+    /* Diagram Section Cards */
+    .diagram-block {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 28px 32px;
+      margin-bottom: 32px;
+      box-shadow: var(--shadow);
+    }
+
+    .diagram-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 14px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .diagram-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .diagram-tag {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.72rem;
+      padding: 4px 10px;
+      border-radius: 4px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    /* Mermaid Canvas Container */
+    .mermaid-wrapper {
+      background: #FAFAF8;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 20px 12px;
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .mermaid {
+      width: 100%;
+      text-align: center;
+    }
+
+    /* Quick Specs Grid */
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .spec-item {
+      background: #FAFAF8;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+    }
+
+    .spec-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .spec-desc {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      line-height: 1.45;
+    }
+
+    /* Fusion Visual Block */
+    .fusion-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: 16px;
+      align-items: center;
+      background: #FAFAF8;
+      border: 1px dashed var(--accent-gold);
+      border-radius: var(--radius-sm);
+      padding: 20px 24px;
+    }
+
+    .fusion-box {
+      background: #FFFFFF;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+    }
+
+    .fusion-box h4 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .fusion-list {
+      list-style: none;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+    }
+
+    .fusion-list li {
+      margin-bottom: 4px;
+    }
+
+    .fusion-list li::before {
+      content: "→ ";
+      color: var(--accent-gold-dark);
+      font-weight: bold;
+    }
+
+    .fusion-arrow {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.72rem;
+      color: var(--accent-gold-dark);
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .key-badge {
+      background: #181817;
+      color: #FFF;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-color);
+      padding-top: 20px;
+      margin-top: 32px;
+    }
+
+    @media (max-width: 992px) {
+      .specs-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .fusion-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 576px) {
+      .specs-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- Header Técnico Direto -->
+    <header>
+      <div>
+        <span class="header-badge">Arquitetura de Dados & Compilação</span>
+        <h1>Motor de Automação do Laudo Pericial</h1>
+        <p class="header-desc">
+          Mapeamento visual do fluxo de dados: da Pré-Vistoria à compilação direta no modelo <strong>LaTeX (.tex)</strong> do cliente.
+        </p>
+      </div>
+      <div style="font-family: 'Fira Code', monospace; font-size: 0.8rem; color: var(--accent-gold-dark);">
+        Status: Pronto para Template .tex
+      </div>
+    </header>
+
+    <!-- FLUXOGRAMA 1: PIPELINE HORIZONTAL PONTA A PONTA -->
+    <section class="diagram-block">
+      <div class="diagram-title-row">
+        <h2 class="diagram-title">
+          <span>1. Ciclo Ponta a Ponta da Automação</span>
+        </h2>
+        <span class="diagram-tag">FLUXO GERAL HORIZONTAL</span>
+      </div>
+
+      <!-- Renderizador Mermaid Gráfico 1 (Horizontal) -->
+      <div class="mermaid-wrapper">
+        <pre class="mermaid">
+flowchart LR
+    subgraph ETAPA0 ["0. Pré-Vistoria (Escritório)"]
+        PDF["📄 Autos do Processo<br/>(PDF 300+ págs)"]
+        AI_EXTRACTION["🤖 Gemini Spark<br/>(Extração dos Autos)"]
+        SHEET["📊 Planilha de Pré-Vistoria<br/>(Google Sheets)"]
+        
+        PDF --> AI_EXTRACTION
+        AI_EXTRACTION --> SHEET
+    end
+
+    subgraph ETAPA1 ["1. Campo (App Mobile)"]
+        APP["📱 App VistoriaPro<br/>(Modo Offline)"]
+        FIELD_DATA["📸 Fotos + Medições<br/>+ Dados de Campo"]
+        
+        SHEET -.->|Agenda| APP
+        APP --> FIELD_DATA
+    end
+
+    subgraph ETAPA2 ["2. Fusão de Dados"]
+        SCRIPT["⚡ Google Apps Script<br/>(Match por Nº do Processo)"]
+        MERGE["🔗 Pacote Unificado<br/>(Processo + Campo)"]
+        
+        FIELD_DATA --> SCRIPT
+        SHEET --> SCRIPT
+        SCRIPT --> MERGE
+    end
+
+    subgraph ETAPA3 ["3. Compilação (Vercel)"]
+        AI_QUESITOS["⚖️ Gemini 3.5 Flash<br/>(Responde Quesitos)"]
+        TECTONIC["⚙️ Compilador LaTeX<br/>(Template .tex do Cliente)"]
+        
+        MERGE --> AI_QUESITOS
+        AI_QUESITOS --> TECTONIC
+    end
+
+    subgraph ETAPA4 ["4. Entrega (Drive)"]
+        OUT_PDF["📑 Laudo_Pericial.pdf"]
+        OUT_TEX["📝 Laudo_Pericial.tex"]
+        
+        TECTONIC --> OUT_PDF
+        TECTONIC --> OUT_TEX
+    end
+
+    style ETAPA0 fill:#F4F8FA,stroke:#2E5A88,stroke-width:1.5px
+    style ETAPA1 fill:#FFFDF9,stroke:#BFAA8F,stroke-width:1.5px
+    style ETAPA2 fill:#FAF8F5,stroke:#917B60,stroke-width:1.5px
+    style ETAPA3 fill:#1E2022,stroke:#BFAA8F,stroke-width:1.5px,color:#FFF
+    style ETAPA4 fill:#F2F7EF,stroke:#5A7545,stroke-width:1.5px
+    style AI_EXTRACTION fill:#2E5A88,color:#FFF,stroke:#2E5A88
+    style AI_QUESITOS fill:#BFAA8F,color:#181817,stroke:#917B60
+    style OUT_PDF fill:#5A7545,color:#FFF,stroke:#5A7545
+    style OUT_TEX fill:#5A7545,color:#FFF,stroke:#5A7545
+        </pre>
+      </div>
+
+      <!-- Resumo Rápido dos 4 Blocos -->
+      <div class="specs-grid">
+        <div class="spec-item">
+          <div class="spec-title">0. Extração dos Autos</div>
+          <div class="spec-desc">Gemini Spark extrai dados e quesitos do processo para a planilha de Pré-Vistoria.</div>
+        </div>
+        <div class="spec-item">
+          <div class="spec-title">1. Coleta em Campo</div>
+          <div class="spec-desc">Perito preenche as evidências e tira fotos no app sem necessidade de sinal de internet.</div>
+        </div>
+        <div class="spec-item">
+          <div class="spec-title">2. Fusão por Nº do Processo</div>
+          <div class="spec-desc">O script casa os dados da planilha com as fotos e observações colhidas no local.</div>
+        </div>
+        <div class="spec-item">
+          <div class="spec-title">3. Resolução & Compilação</div>
+          <div class="spec-desc">Gemini 3.5 Flash responde os quesitos e o LaTeX compila o PDF e .TEX em ~1.5s.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLUXOGRAMA 2: COMO OS DADOS PREENCHEM O TEMPLATE .TEX -->
+    <section class="diagram-block">
+      <div class="diagram-title-row">
+        <h2 class="diagram-title">
+          <span>2. Mapeamento de Dados no Template LaTeX (.tex)</span>
+        </h2>
+        <span class="diagram-tag">INJEÇÃO NO MODELO DO CLIENTE</span>
+      </div>
+
+      <!-- Renderizador Mermaid Gráfico 2 (Horizontal) -->
+      <div class="mermaid-wrapper">
+        <pre class="mermaid">
+flowchart LR
+    subgraph ORIGEM ["Origens dos Dados"]
+        direction TB
+        SRC_PRE["📄 Dados da Pré-Vistoria<br/>(Processo, Partes, Vara, Consumos)"]
+        SRC_APP["📱 Dados Coletados no App<br/>(Medições, Fotos, Checklist, Constatações)"]
+        SRC_AI["🤖 Quesitos Processuais<br/>(Resolvidos pelo Gemini 3.5 Flash)"]
+    end
+
+    subgraph ENGINE ["Motor de Injeção"]
+        direction TB
+        INJECT["⚡ Injeção de Variáveis, Quesitos,<br/>Fotos & Histórico de Consumo"]
+        COMPILE["⚙️ Compilação Tectonic (XeTeX)"]
+        INJECT --> COMPILE
+    end
+
+    subgraph SAIDA ["Documentos Gerados no Google Drive"]
+        direction TB
+        DOC_PDF["📑 Laudo Pericial Oficial (PDF)"]
+        DOC_TEX["📝 Código-Fonte Aberto (.tex)"]
+    end
+
+    SRC_PRE --> INJECT
+    SRC_APP --> INJECT
+    SRC_AI --> INJECT
+    COMPILE --> DOC_PDF
+    COMPILE --> DOC_TEX
+
+    style ORIGEM fill:#FAF9F6,stroke:#BFAA8F,stroke-width:1.5px
+    style ENGINE fill:#1E2022,stroke:#BFAA8F,stroke-width:1.5px,color:#FFF
+    style SAIDA fill:#F2F7EF,stroke:#5A7545,stroke-width:1.5px
+    style INJECT fill:#BFAA8F,color:#181817,stroke:#917B60
+    style DOC_PDF fill:#5A7545,color:#FFF,stroke:#5A7545
+    style DOC_TEX fill:#5A7545,color:#FFF,stroke:#5A7545
+        </pre>
+      </div>
+
+      <!-- Demonstração Direta da Fusão por Chave CNJ -->
+      <div class="fusion-grid">
+        
+        <div class="fusion-box">
+          <h4 style="color: var(--accent-blue);">📄 Dados da Pré-Vistoria</h4>
+          <ul class="fusion-list">
+            <li>Dados do Processo e Vara</li>
+            <li>Qualificação das Partes</li>
+            <li>Quesitos do Autor e Réu</li>
+            <li>Histórico / Consumos</li>
+          </ul>
+        </div>
+
+        <div class="fusion-arrow">
+          <span class="key-badge">CHAVE: Nº PROCESSO</span>
+          <span>+</span>
+        </div>
+
+        <div class="fusion-box">
+          <h4 style="color: var(--accent-sage);">📱 Dados de Campo (App)</h4>
+          <ul class="fusion-list">
+            <li>Fotos em Alta Resolução</li>
+            <li>Dados e Condições do Medidor</li>
+            <li>Levantamento / Checklist Técnico</li>
+            <li>Observações do Perito</li>
+          </ul>
+        </div>
+
+        <div class="fusion-arrow">
+          <span>➔</span>
+        </div>
+
+        <div class="fusion-box" style="background: #FFFDF9; border-color: var(--accent-gold);">
+          <h4 style="color: var(--accent-gold-dark);">📑 Template .tex do Cliente</h4>
+          <ul class="fusion-list">
+            <li>Variáveis preenchidas</li>
+            <li>Quesitos respondidos com IA</li>
+            <li>Fotos diagramadas em grid</li>
+            <li>Valores de histórico de consumo</li>
+            <li>PDF e .TEX salvos no Drive</li>
+          </ul>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      VistoriaPro · Diagrama de Engenharia Diagnóstica e Automação de Laudos
+    </footer>
+
+  </div>
+
+</body>
+</html>

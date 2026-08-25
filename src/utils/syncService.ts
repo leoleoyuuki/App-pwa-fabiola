@@ -193,6 +193,7 @@ export async function syncInspection(
       medidorChip: inspection.medidorChip,
       condicoesMedidor: inspection.condicoesMedidor,
       corteEnergia: inspection.corteEnergia,
+      observacoesMedidor: inspection.observacoesMedidor || '',
       qtdPessoas: inspection.qtdPessoas,
       qtdComodos: inspection.qtdComodos,
       numLampadas: inspection.numLampadas,

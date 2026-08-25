@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../utils/db';
-import type { PhotoData, InspectionData } from '../utils/db';
+import type { PhotoData, InspectionData, DraftData } from '../utils/db';
 import { generateThumbnail } from '../utils/thumbnailGenerator';
 import { 
   Camera, 
@@ -18,13 +18,16 @@ import {
   CheckSquare,
   Home,
   Tv,
-  RefreshCw
+  RefreshCw,
+  PlusCircle
 } from 'lucide-react';
 
 interface InspectionFormProps {
   onInspectionAdded: () => void;
   isOnline: boolean;
   userEmail?: string;
+  loadedDraft?: DraftData | null;
+  onClearLoadedDraft?: () => void;
 }
 
 function getTodayDateString(): string {
@@ -71,8 +74,13 @@ function formatDisplayDate(dateStr: string): string {
 export const InspectionForm: React.FC<InspectionFormProps> = ({
   onInspectionAdded,
   isOnline,
-  userEmail
+  userEmail,
+  loadedDraft,
+  onClearLoadedDraft
 }) => {
+  // Current Draft tracking
+  const [currentDraftId, setCurrentDraftId] = useState<string>(() => 'draft_' + Date.now());
+
   // Form fields
   const [nomeAutor, setNomeAutor] = useState('');
   const [numeroProcesso, setNumeroProcesso] = useState('');
@@ -88,6 +96,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   const [medidorChip, setMedidorChip] = useState('Não');
   const [condicoesMedidor, setCondicoesMedidor] = useState('Boa (Lacrado)');
   const [corteEnergia, setCorteEnergia] = useState('Não');
+  const [observacoesMedidor, setObservacoesMedidor] = useState('');
   const [qtdPessoas, setQtdPessoas] = useState('1');
   const [qtdComodos, setQtdComodos] = useState('1');
   const [numLampadas, setNumLampadas] = useState('');
@@ -126,6 +135,104 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   const galleryImovelRef = useRef<HTMLInputElement>(null);
   const cameraMedidorRef = useRef<HTMLInputElement>(null);
   const galleryMedidorRef = useRef<HTMLInputElement>(null);
+
+  // Helper to populate form fields from a draft object
+  const applyDraftToForm = (draft: any) => {
+    if (!draft) return;
+    if (draft.id) setCurrentDraftId(draft.id);
+    setNomeAutor(draft.nomeAutor || '');
+    setNumeroProcesso(draft.numeroProcesso || '');
+    setReuConcessionaria(draft.reuConcessionaria || '');
+    setTipoAcao(draft.tipoAcao || 'Consumo');
+    setDataVistoria(draft.dataVistoria || '');
+    setNumeroVistoria(draft.numeroVistoria || '1');
+    setPeriodoVistoria(draft.periodoVistoria || 'Manhã 09 - 12 h');
+    setRepresentacaoAutor(draft.representacaoAutor || 'Sim');
+    setRepresentacaoReu(draft.representacaoReu || 'Sim');
+    setObservacoesPresenca(draft.observacoesPresenca || '');
+    setNumeroMedidor(draft.numeroMedidor || '');
+    setMedidorChip(draft.medidorChip || 'Não');
+    setCondicoesMedidor(draft.condicoesMedidor || 'Boa (Lacrado)');
+    setCorteEnergia(draft.corteEnergia || 'Não');
+    setObservacoesMedidor(draft.observacoesMedidor || '');
+    setQtdPessoas(draft.qtdPessoas || '1');
+    setQtdComodos(draft.qtdComodos || '1');
+    setNumLampadas(draft.numLampadas || '');
+    setNumTvs(draft.numTvs || '0');
+    setNumVentiladores(draft.numVentiladores || '0');
+    setNumVentiladoresTeto(draft.numVentiladoresTeto || '0');
+    setNumArCondicionados(draft.numArCondicionados || '0');
+    setNumGeladeiras(draft.numGeladeiras || '0');
+    setNumChuveiros(draft.numChuveiros || '0');
+    setNumMaquinasLavar(draft.numMaquinasLavar || '0');
+    setNumFreezers(draft.numFreezers || '0');
+    setChecklist(draft.checklist || []);
+    setObservacoesFinais(draft.observacoesFinais || '');
+    setPhotosImovel(draft.photosImovel || []);
+    setPhotosMedidor(draft.photosMedidor || []);
+    setDraftSavedAt('Rascunho recuperado');
+  };
+
+  // Helper to completely clear the form and start a fresh inspection
+  const handleStartNewInspection = async () => {
+    setCurrentDraftId('draft_' + Date.now());
+    setNomeAutor('');
+    setNumeroProcesso('');
+    setReuConcessionaria('');
+    setTipoAcao('Consumo');
+    setDataVistoria('');
+    setNumeroVistoria('1');
+    setPeriodoVistoria('Manhã 09 - 12 h');
+    setRepresentacaoAutor('Sim');
+    setRepresentacaoReu('Sim');
+    setObservacoesPresenca('');
+    setNumeroMedidor('');
+    setMedidorChip('Não');
+    setCondicoesMedidor('Boa (Lacrado)');
+    setCorteEnergia('Não');
+    setObservacoesMedidor('');
+    setQtdPessoas('1');
+    setQtdComodos('1');
+    setNumLampadas('');
+    setNumTvs('0');
+    setNumVentiladores('0');
+    setNumVentiladoresTeto('0');
+    setNumArCondicionados('0');
+    setNumGeladeiras('0');
+    setNumChuveiros('0');
+    setNumMaquinasLavar('0');
+    setNumFreezers('0');
+    setChecklist([]);
+    setObservacoesFinais('');
+    setPhotosImovel([]);
+    setPhotosMedidor([]);
+    setDraftSavedAt(null);
+    await db.clearActiveDraft(userEmail);
+    onClearLoadedDraft?.();
+  };
+
+  // If a specific draft is passed via props (from Drafts tab), load it immediately
+  useEffect(() => {
+    if (loadedDraft) {
+      applyDraftToForm(loadedDraft);
+    }
+  }, [loadedDraft]);
+
+  // Load active draft on mount or user change (if no explicit draft was passed)
+  useEffect(() => {
+    if (loadedDraft) return;
+    const loadInitialDraft = async () => {
+      try {
+        const draft = await db.getActiveDraft(userEmail);
+        if (draft) {
+          applyDraftToForm(draft);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar rascunho ativo:', err);
+      }
+    };
+    loadInitialDraft();
+  }, [userEmail]);
 
   // Load scheduled processes from IndexedDB cache on mount or user change
   useEffect(() => {
@@ -177,59 +284,18 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     }
   };
 
-  // Load draft on mount or user change
-  useEffect(() => {
-    const loadDraft = async () => {
-      try {
-        const draft = await db.getDraft(userEmail);
-        if (draft) {
-          setNomeAutor(draft.nomeAutor || '');
-          setNumeroProcesso(draft.numeroProcesso || '');
-          setReuConcessionaria(draft.reuConcessionaria || '');
-          setTipoAcao(draft.tipoAcao || 'Consumo');
-          setDataVistoria(draft.dataVistoria || '');
-          setNumeroVistoria(draft.numeroVistoria || '1');
-          setPeriodoVistoria(draft.periodoVistoria || 'Manhã 09 - 12 h');
-          setRepresentacaoAutor(draft.representacaoAutor || 'Sim');
-          setRepresentacaoReu(draft.representacaoReu || 'Sim');
-          setObservacoesPresenca(draft.observacoesPresenca || '');
-          setNumeroMedidor(draft.numeroMedidor || '');
-          setMedidorChip(draft.medidorChip || 'Não');
-          setCondicoesMedidor(draft.condicoesMedidor || 'Boa (Lacrado)');
-          setCorteEnergia(draft.corteEnergia || 'Não');
-          setQtdPessoas(draft.qtdPessoas || '1');
-          setQtdComodos(draft.qtdComodos || '1');
-          setNumLampadas(draft.numLampadas || '');
-          setNumTvs(draft.numTvs || '0');
-          setNumVentiladores(draft.numVentiladores || '0');
-          setNumVentiladoresTeto(draft.numVentiladoresTeto || '0');
-          setNumArCondicionados(draft.numArCondicionados || '0');
-          setNumGeladeiras(draft.numGeladeiras || '0');
-          setNumChuveiros(draft.numChuveiros || '0');
-          setNumMaquinasLavar(draft.numMaquinasLavar || '0');
-          setNumFreezers(draft.numFreezers || '0');
-          setChecklist(draft.checklist || []);
-          setObservacoesFinais(draft.observacoesFinais || '');
-          setPhotosImovel(draft.photosImovel || []);
-          setPhotosMedidor(draft.photosMedidor || []);
-          setDraftSavedAt('Rascunho recuperado');
-        }
-      } catch (err) {
-        console.error('Erro ao carregar rascunho:', err);
-      }
-    };
-    loadDraft();
-  }, [userEmail]);
-
-  // Autosave draft on field changes
+  // Autosave draft on field changes (Continuous Auto-Save)
   useEffect(() => {
     const saveDraft = async () => {
       // Don't autosave if all fields are completely empty
-      if (!nomeAutor && !numeroProcesso && !reuConcessionaria && !observacoesFinais && photosImovel.length === 0 && photosMedidor.length === 0) {
+      if (!nomeAutor && !numeroProcesso && !reuConcessionaria && !observacoesFinais && !observacoesMedidor && photosImovel.length === 0 && photosMedidor.length === 0) {
         return;
       }
       try {
         await db.saveDraft({
+          id: currentDraftId,
+          updatedAt: new Date().toISOString(),
+          peritoEmail: userEmail,
           nomeAutor,
           numeroProcesso,
           reuConcessionaria,
@@ -244,6 +310,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
           medidorChip,
           condicoesMedidor,
           corteEnergia,
+          observacoesMedidor,
           qtdPessoas,
           qtdComodos,
           numLampadas,
@@ -267,13 +334,13 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
       }
     };
 
-    const timer = setTimeout(saveDraft, 1000);
+    const timer = setTimeout(saveDraft, 800);
     return () => clearTimeout(timer);
   }, [
-    nomeAutor, numeroProcesso, reuConcessionaria, tipoAcao, dataVistoria,
+    currentDraftId, nomeAutor, numeroProcesso, reuConcessionaria, tipoAcao, dataVistoria,
     numeroVistoria, periodoVistoria, representacaoAutor, representacaoReu,
     observacoesPresenca, numeroMedidor, medidorChip, condicoesMedidor,
-    corteEnergia, qtdPessoas, qtdComodos, numLampadas, numTvs,
+    corteEnergia, observacoesMedidor, qtdPessoas, qtdComodos, numLampadas, numTvs,
     numVentiladores, numVentiladoresTeto, numArCondicionados, numGeladeiras,
     numChuveiros, numMaquinasLavar, numFreezers, checklist, observacoesFinais,
     photosImovel, photosMedidor, userEmail
@@ -362,6 +429,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
       medidorChip,
       condicoesMedidor,
       corteEnergia,
+      observacoesMedidor: observacoesMedidor.trim(),
       qtdPessoas,
       qtdComodos,
       numLampadas: numLampadas.trim(),
@@ -381,39 +449,10 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
 
     try {
       await db.addToQueue(inspection);
-      await db.clearDraft(userEmail);
+      await db.deleteDraft(currentDraftId, userEmail);
+      await db.clearActiveDraft(userEmail);
       
-      // Clear form states
-      setNomeAutor('');
-      setNumeroProcesso('');
-      setReuConcessionaria('');
-      setTipoAcao('Consumo');
-      setDataVistoria('');
-      setNumeroVistoria('1');
-      setPeriodoVistoria('Manhã 09 - 12 h');
-      setRepresentacaoAutor('Sim');
-      setRepresentacaoReu('Sim');
-      setObservacoesPresenca('');
-      setNumeroMedidor('');
-      setMedidorChip('Não');
-      setCondicoesMedidor('Boa (Lacrado)');
-      setCorteEnergia('Não');
-      setQtdPessoas('1');
-      setQtdComodos('1');
-      setNumLampadas('');
-      setNumTvs('0');
-      setNumVentiladores('0');
-      setNumVentiladoresTeto('0');
-      setNumArCondicionados('0');
-      setNumGeladeiras('0');
-      setNumChuveiros('0');
-      setNumMaquinasLavar('0');
-      setNumFreezers('0');
-      setChecklist([]);
-      setObservacoesFinais('');
-      setPhotosImovel([]);
-      setPhotosMedidor([]);
-      setDraftSavedAt(null);
+      await handleStartNewInspection();
       
       onInspectionAdded();
       setShowSuccessModal(true);
@@ -589,13 +628,51 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     <div className="fade-in" style={{ padding: '16px 16px 120px 16px', maxWidth: '600px', margin: '0 auto', width: '100%' }}>
       
       {/* Header Visual Style */}
-      <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+      <div style={{ textAlign: 'center', marginBottom: '16px' }}>
         <h1 style={{ fontSize: '2rem', fontFamily: 'var(--font-serif)', fontWeight: 400, color: 'var(--text-primary)' }}>
           Laudo de Consumo
         </h1>
         <p style={{ fontStyle: 'italic', color: 'var(--text-secondary)' }}>
           Perícia de Consumo (Energia)
         </p>
+      </div>
+
+      {/* Auto-save & Active Draft Action Bar */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 'var(--radius-sm)',
+        padding: '8px 14px',
+        marginBottom: '16px',
+        fontSize: '0.78rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+          <Save size={14} style={{ color: 'var(--accent-gold)' }} />
+          <span>{draftSavedAt || 'Salvamento automático ativo (offline)'}</span>
+        </div>
+        {(nomeAutor || numeroProcesso || photosImovel.length > 0 || photosMedidor.length > 0) && (
+          <button
+            type="button"
+            onClick={handleStartNewInspection}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--accent-gold-hover)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              padding: '2px 6px',
+              fontSize: '0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <PlusCircle size={13} /> Limpar / Nova Vistoria
+          </button>
+        )}
       </div>
 
       {/* Sync Scheduled Processes Bar */}
@@ -968,6 +1045,18 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
             ['Sim', 'Não', 'Outro'],
             <Zap size={14} style={{ color: 'var(--accent-gold)' }} />
           )}
+
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Observações sobre o Medidor</label>
+            <textarea 
+              className="form-control" 
+              rows={3} 
+              placeholder="Descreva observações específicas do medidor, lacres, visor, avarias..." 
+              value={observacoesMedidor}
+              onChange={(e) => setObservacoesMedidor(e.target.value)}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
         </section>
 
         {/* SECTION 5: Características da UC */}
@@ -984,13 +1073,20 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
             <Users size={14} style={{ color: 'var(--accent-gold)' }} />
           )}
 
-          {renderSelect(
-            'Quantidade de cômodos',
-            qtdComodos,
-            setQtdComodos,
-            ['1', '2', '3', '4', '5', '6', '7', '8'],
-            <Home size={14} style={{ color: 'var(--accent-gold)' }} />
-          )}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Home size={14} style={{ color: 'var(--accent-gold)' }} />
+              Quantidade de cômodos
+            </label>
+            <input 
+              type="number" 
+              className="form-control" 
+              placeholder="Ex: 8 (digite qualquer quantidade)" 
+              min="1"
+              value={qtdComodos}
+              onChange={(e) => setQtdComodos(e.target.value)}
+            />
+          </div>
         </section>
 
         {/* SECTION 6: Eletrodomésticos */}
@@ -1296,6 +1392,19 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
                   Nenhuma foto do Medidor adicionada ainda.
                 </div>
               )}
+
+              {/* Observações escritas sobre o medidor/fotos */}
+              <div className="form-group" style={{ marginTop: '14px', marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: '0.85rem' }}>Observações sobre o Medidor / Fotos</label>
+                <textarea 
+                  className="form-control" 
+                  rows={2} 
+                  placeholder="Anotações sobre lacres, visor, avarias ou detalhes das fotos do medidor..." 
+                  value={observacoesMedidor}
+                  onChange={(e) => setObservacoesMedidor(e.target.value)}
+                  style={{ resize: 'vertical', fontSize: '0.85rem' }}
+                />
+              </div>
             </div>
           )}
 
