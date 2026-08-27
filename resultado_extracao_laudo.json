@@ -1,0 +1,110 @@
+{
+  "dadosProcesso": {
+    "numeroProcesso": "1004582-19.2026.8.26.0100",
+    "tribunal": "Tribunal de Justiça do Estado de São Paulo",
+    "comarca": "São Paulo",
+    "vara": "14ª Vara Cível",
+    "classe": "Procedimento Comum Cível",
+    "autor": {
+      "razaoSocial": "RESTAURANTE E PANIFICADORA SABOR CENTRAL LTDA. - ME",
+      "cnpj": "12.345.678/0001-90",
+      "endereco": "Rua da Consolação, nº 1420, Bairro Consolação, São Paulo/SP, CEP 01302-000",
+      "socio": "CARLOS EDUARDO MENDES",
+      "advogada": "DRA. MARIANA ALBUQUERQUE CARDOSO",
+      "oab": "385.920"
+    },
+    "reu": {
+      "razaoSocial": "ENERGIA METROPOLITANA DISTRIBUIÇÃO S.A.",
+      "cnpj": "61.695.227/0001-93",
+      "endereco": "Rua Funchal, nº 418, Vila Olímpia, São Paulo/SP, CEP 04551-060"
+    },
+    "unidadeConsumidora": "98765432-1",
+    "totalDebitoImpugnado": "R$ 48.711,55",
+    "valorCausa": "R$ 48.711,55"
+  },
+  "historicoConsumo": [
+    {
+      "mesReferencia": "Fevereiro/2026",
+      "medidor": "Eletromecânico",
+      "consumoKWh": 3350,
+      "valorFaturadoRS": 3280.45,
+      "situacao": "Pago"
+    },
+    {
+      "mesReferencia": "Março/2026",
+      "medidor": "Eletromecânico",
+      "consumoKWh": 3410,
+      "valorFaturadoRS": 3345.1,
+      "situacao": "Pago"
+    },
+    {
+      "mesReferencia": "Abril/2026",
+      "medidor": "Eletromecânico",
+      "consumoKWh": 3290,
+      "valorFaturadoRS": 3210.0,
+      "situacao": "Pago"
+    },
+    {
+      "mesReferencia": "Junho/2026",
+      "medidor": "Digital XZ-900",
+      "consumoKWh": 14850,
+      "valorFaturadoRS": 15420.8,
+      "situacao": "Impugnado"
+    },
+    {
+      "mesReferencia": "Julho/2026",
+      "medidor": "Digital XZ-900",
+      "consumoKWh": 16200,
+      "valorFaturadoRS": 16980.5,
+      "situacao": "Impugnado"
+    },
+    {
+      "mesReferencia": "Agosto/2026",
+      "medidor": "Digital XZ-900",
+      "consumoKWh": 15740,
+      "valorFaturadoRS": 16310.25,
+      "situacao": "Impugnado"
+    }
+  ],
+  "analisePericial": {
+    "mediaHistoricaKWh": 3350,
+    "mediaHistoricaRS": 3278.52,
+    "mediaImpugnadaKWh": 15596.67,
+    "mediaImpugnadaRS": 16237.18,
+    "aumentoPercentual": "365.57%",
+    "consumoEstimadoCargasKWh": 3757.2,
+    "conclusaoTecnica": "O medidor eletrônico XZ-900 apresenta falha metrológica grave, registrando pulsos em ritmo 4x superior à demanda real aferida em campo, o que invalida os faturamentos dos meses de junho a agosto de 2026."
+  },
+  "respostasAosQuesitos": [
+    {
+      "numero": 1,
+      "origem": "Autora",
+      "enunciado": "Queira o Sr. Perito realizar a conferência metrológica e ensaios de calibração no medidor eletrônico digital nº BR-5544882 instalado na UC nº 98765432-1, informando se os seus registradores de energia ativa (kWh) estão em estrita conformidade com os erros máximos admissíveis pelo INMETRO?",
+      "respostaPericialFundamentada": "Negativo. A aferição amperimétrica direta em campo demonstrou que o medidor registra pulsos equivalentes a uma demanda de 28 kW, enquanto a carga real operante é de apenas 6,8 kW. O dispositivo encontra-se em desacordo com os erros máximos admissíveis, apresentando erro de medição por falha no circuito integrador."
+    },
+    {
+      "numero": 2,
+      "origem": "Autora",
+      "enunciado": "A instalação elétrica interna da Autora (fiação, disjuntores, condutores e quadros de distribuição) apresenta fugas de corrente, curto-circuitos ou anomalias que possam ter gerado o consumo exacerbado registrado nos meses de junho a agosto de 2026?",
+      "respostaPericialFundamentada": "Não. A vistoria técnica constatou que a instalação elétrica está em conformidade com a NBR 5410, com resistência de isolamento superior a 2,5 MΩ e ausência de fugas de corrente ou desvios de energia."
+    },
+    {
+      "numero": 3,
+      "origem": "Autora",
+      "enunciado": "A capacidade nominal somada e a curva de carga de todos os equipamentos elétricos existentes no estabelecimento comercial seriam suficientes para atingir o patamar de 16.200 kWh/mês, considerando o regime de funcionamento de 12 horas diárias do estabelecimento?",
+      "respostaPericialFundamentada": "Não. O levantamento de carga instalada e o regime de operação indicam um consumo estimado de 3.757,20 kWh/mês. O patamar de 16.200 kWh/mês é tecnicamente incompatível com a potência instalada e o perfil de consumo da unidade."
+    },
+    {
+      "numero": 4,
+      "origem": "Autora",
+      "enunciado": "Há indícios de transientes na rede de distribuição, surtos de tensão ou harmônicos que possam ter provocado saturação ou distorção de leitura nas placas de medição eletrônica do aparelho?",
+      "respostaPericialFundamentada": "Não foram encontrados indícios de distúrbios na rede que justificassem a falha. A anomalia é restrita ao circuito de processamento interno do medidor, que apresenta erro sistemático de multiplicação de pulsos."
+    },
+    {
+      "numero": 5,
+      "origem": "Autora",
+      "enunciado": "Queira o Perito calcular o valor médio real de consumo que deveria ter sido faturado nos meses objeto da lide, com base na série histórica e na carga efetivamente operante.",
+      "respostaPericialFundamentada": "Considerando a média histórica de 3.350 kWh e a estimativa de carga de 3.757,20 kWh, recomenda-se o faturamento pela média aritmética dos últimos 12 meses anteriores à substituição do medidor, conforme preceitua a Resolução ANEEL vigente para casos de erro de medição."
+    }
+  ]
+}
