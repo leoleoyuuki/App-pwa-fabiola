@@ -212,7 +212,7 @@ function doPost(e) {
       if (partesDate.length === 3) {
         dataVistoriaFormatada = partesDate[2] + "-" + partesDate[1] + "-" + partesDate[0];
       } else {
-        dataVistoriaFormatada = data.dataVistoria.toString().replace(///g, "-");
+        dataVistoriaFormatada = data.dataVistoria.toString().split("/").join("-");
       }
     }
     
