@@ -4,7 +4,8 @@
  * =========================================================================
  * Contempla:
  *  - Chave Mestre ON/OFF para Ativar/Desativar Geração de Laudo Automático
- *  - Mapeamento dinâmico e flexível de colunas da aba "Pré-Vistoria"
+ *  - Busca Ultra-Flexível de Abas ("Pré-Vistoria", "Pre Vistoria", etc.)
+ *  - Mapeamento dinâmico e flexível de colunas da Pré-Vistoria (CSV, Quesitos, etc.)
  *  - Exportação e salvamento de todos os arquivos fontes (.pdf, dados.tex, historico_consumo.csv, modelo_auto.tex) na pasta do Google Drive
  *  - Roteamento por perito (Rodrigues, Leo K., Leo Yuuki Dev)
  *  - Dupla camada anti-duplicidade (Cache do Google + Verificação das últimas 30 linhas)
@@ -78,7 +79,7 @@ function doGet(e) {
 
     // CASO 1: Busca a lista de Pré-Vistorias geradas pelo Gemini Spark
     if (action === "previstoria") {
-      var sheetPre = buscarAbaFlexivel(ss, "Pré-Vistoria");
+      var sheetPre = buscarAbaFlexivel(ss, "Pré-Vistoria") || buscarAbaFlexivel(ss, "Pre-Vistoria") || buscarAbaFlexivel(ss, "PreVistoria");
       if (!sheetPre) {
         sheetPre = ss.insertSheet("Pré-Vistoria");
         sheetPre.appendRow([
@@ -249,7 +250,7 @@ function doPost(e) {
 
     // 2.1 GRAVAÇÃO DE DADOS DE PRÉ-VISTORIA (Extraídos pelo Gemini Spark)
     if (data.action === "salvar_previstoria") {
-      var sheetPre = buscarAbaFlexivel(ss, "Pré-Vistoria");
+      var sheetPre = buscarAbaFlexivel(ss, "Pré-Vistoria") || buscarAbaFlexivel(ss, "Pre-Vistoria") || buscarAbaFlexivel(ss, "PreVistoria");
       if (!sheetPre) {
         sheetPre = ss.insertSheet("Pré-Vistoria");
         sheetPre.appendRow([
@@ -444,14 +445,15 @@ function doPost(e) {
     sheet.appendRow(novaLinha);
     cache.put(cacheKey, "gravado", 21600);
 
-    // 4. Integração Pré-Vistoria (Extração Robusta e Flexível por Nomes de Cabeçalho)
+    // 4. Integração Pré-Vistoria (Extração Ultra-Flexível de Qualquer Variação da Aba)
     var urlLaudoGerado = "";
-    var sheetPreCheck = buscarAbaFlexivel(ss, "Pré-Vistoria");
+    var sheetPreCheck = buscarAbaFlexivel(ss, "Pré-Vistoria") || buscarAbaFlexivel(ss, "Pre-Vistoria") || buscarAbaFlexivel(ss, "PreVistoria") || buscarAbaFlexivel(ss, "Pre Vistoria");
     var dadosPreVistoria = null;
     var linhaPreVistoriaEncontrada = -1;
+    var extraido = null;
 
     if (sheetPreCheck) {
-      var extraido = extrairDadosPreVistoriaDinamico(sheetPreCheck, data.numeroProcesso, nomeAutor);
+      extraido = extrairDadosPreVistoriaDinamico(sheetPreCheck, data.numeroProcesso, nomeAutor);
       if (extraido) {
         dadosPreVistoria = extraido.dados;
         linhaPreVistoriaEncontrada = extraido.linha;
@@ -569,7 +571,8 @@ function extrairDadosPreVistoriaDinamico(sheetPre, numeroProcessoBuscado, nomeAu
   function acharColuna(aliases) {
     for (var i = 0; i < headers.length; i++) {
       for (var a = 0; a < aliases.length; a++) {
-        if (headers[i].indexOf(aliases[a]) !== -1) return i;
+        var aliasLimpo = aliases[a].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+        if (headers[i].indexOf(aliasLimpo) !== -1 || aliasLimpo.indexOf(headers[i]) !== -1) return i;
       }
     }
     return -1;
@@ -577,8 +580,8 @@ function extrairDadosPreVistoriaDinamico(sheetPre, numeroProcessoBuscado, nomeAu
 
   var colProc = acharColuna(["numerodoprocesso", "processo", "numprocesso", "cnj"]);
   var colAutor = acharColuna(["nomedoautor", "autor", "parteautora"]);
-  var colReu = acharColuna(["nomedoreu", "reu", "concessionaria"]);
-  var colTipo = acharColuna(["tipodeacao", "tipoacao", "acao"]);
+  var colReu = acharColuna(["nomedoreu", "reu", "concessionaria", "empresa"]);
+  var colTipo = acharColuna(["tipodeacao", "tipoacao", "acao", "objeto"]);
   var colVara = acharColuna(["varacomarca", "vara", "juizo", "comarca"]);
   var colCliente = acharColuna(["numerodocliente", "cliente", "instalacao", "uc"]);
   var colToi = acharColuna(["numerodotoi", "toi", "numtoi"]);
@@ -588,15 +591,15 @@ function extrairDadosPreVistoriaDinamico(sheetPre, numeroProcessoBuscado, nomeAu
   var colEnd = acharColuna(["enderecocompleto", "endereco", "local"]);
   var colObj = acharColuna(["objetivodapericia", "objetivo", "escopo"]);
   var colResumo = acharColuna(["resumodoprocesso", "resumo", "sintese"]);
-  var colAleg = acharColuna(["alegacoesdoautor", "alegacoesautor"]);
-  var colCont = acharColuna(["contestacoesdoreu", "contestacoesreu"]);
+  var colAleg = acharColuna(["alegacoesdoautor", "alegacoesautor", "fatosautor"]);
+  var colCont = acharColuna(["contestacoesdoreu", "contestacoesreu", "fatosreu"]);
   var colRedIni = acharColuna(["inicioreducao", "reducaoinicio"]);
   var colRedFim = acharColuna(["fimreducao", "reducaofim"]);
-  var colConsMedio = acharColuna(["consumomedio", "consumoregular", "mediaregular"]);
-  var colConsRecl = acharColuna(["consumoreclamado", "consumomedioreclamado", "mediareclamada"]);
+  var colConsMedio = acharColuna(["consumomedio", "consumoregular", "mediaregular", "consumomediokwh"]);
+  var colConsRecl = acharColuna(["consumoreclamado", "consumomedioreclamado", "mediareclamada", "consumoreclamadokwh"]);
   var colHistIni = acharColuna(["historicoconsumoinicio", "datainiciohistorico"]);
   var colHistFim = acharColuna(["historicoconsumofim", "datafimhistorico"]);
-  var colCsv = acharColuna(["historicoconsumocsv", "historicoconsumo", "csvconsumo", "csv"]);
+  var colCsv = acharColuna(["historicoconsumocsv", "historicoconsumo", "csvconsumo", "csv", "faturas", "leituras"]);
   var colQJuizo = acharColuna(["quesitosjuizo", "quesitosdojuizo", "quesitosjuiz"]);
   var colQAutor = acharColuna(["quesitosautor", "quesitosdoautor", "quesitosautora"]);
   var colQReu = acharColuna(["quesitosreu", "quesitosdoreu", "quesitosconcessionaria"]);
@@ -604,52 +607,66 @@ function extrairDadosPreVistoriaDinamico(sheetPre, numeroProcessoBuscado, nomeAu
   var colLink = acharColuna(["linklaudopdf", "laudopdf", "linkpdf", "laudo"]);
 
   var procBuscadoLimpo = (numeroProcessoBuscado || "").toString().replace(/[^0-9]/g, "");
-  var autorBuscadoLimpo = (nomeAutorBuscado || "").toString().toLowerCase().trim();
+  var autorBuscadoLimpo = (nomeAutorBuscado || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  var primeiroNomeAutor = autorBuscadoLimpo.split(" ")[0] || "";
+
+  var linhaEscolhida = -1;
 
   for (var r = 1; r < dataRange.length; r++) {
     var row = dataRange[r];
     var procRow = colProc >= 0 ? String(row[colProc] || "").replace(/[^0-9]/g, "") : "";
-    var autorRow = colAutor >= 0 ? String(row[colAutor] || "").toLowerCase().trim() : "";
+    var autorRow = colAutor >= 0 ? String(row[colAutor] || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
 
     var bateuProcesso = (procBuscadoLimpo && procRow && (procBuscadoLimpo === procRow || procRow.indexOf(procBuscadoLimpo) !== -1 || procBuscadoLimpo.indexOf(procRow) !== -1));
-    var bateuAutor = (autorBuscadoLimpo && autorRow && (autorBuscadoLimpo.indexOf(autorRow) !== -1 || autorRow.indexOf(autorBuscadoLimpo) !== -1));
+    var bateuAutor = (autorBuscadoLimpo && autorRow && (autorBuscadoLimpo.indexOf(autorRow) !== -1 || autorRow.indexOf(autorBuscadoLimpo) !== -1 || (primeiroNomeAutor.length >= 3 && autorRow.indexOf(primeiroNomeAutor) !== -1)));
 
     if (bateuProcesso || bateuAutor) {
-      return {
-        linha: r + 1,
-        colunaStatus: colStatus >= 0 ? colStatus + 1 : 26,
-        colunaLink: colLink >= 0 ? colLink + 1 : 27,
-        dados: {
-          tipoAcao: colTipo >= 0 ? String(row[colTipo] || "Consumo") : "Consumo",
-          numeroProcesso: colProc >= 0 ? String(row[colProc] || "") : (numeroProcessoBuscado || ""),
-          nomeAutor: colAutor >= 0 ? String(row[colAutor] || "") : (nomeAutorBuscado || ""),
-          nomeReu: colReu >= 0 ? String(row[colReu] || "") : "",
-          varaJuizo: colVara >= 0 ? String(row[colVara] || "") : "",
-          numeroCliente: colCliente >= 0 ? String(row[colCliente] || "") : "",
-          numeroToi: colToi >= 0 ? String(row[colToi] || "") : "",
-          dataLavraturaToi: colDataToi >= 0 ? String(row[colDataToi] || "") : "",
-          irregularidadeAlegada: colIrreg >= 0 ? String(row[colIrreg] || "") : "",
-          valorRecuperacao: colValRec >= 0 ? String(row[colValRec] || "") : "",
-          enderecoPericia: colEnd >= 0 ? String(row[colEnd] || "") : "",
-          objetivoPericia: colObj >= 0 ? String(row[colObj] || "") : "",
-          resumoProcesso: colResumo >= 0 ? String(row[colResumo] || "") : "",
-          alegacoesAutor: colAleg >= 0 ? String(row[colAleg] || "") : "",
-          contestacoesReu: colCont >= 0 ? String(row[colCont] || "") : "",
-          reducaoMesInicio: colRedIni >= 0 ? String(row[colRedIni] || "").split("/")[0] : "01",
-          reducaoAnoInicio: colRedIni >= 0 ? (String(row[colRedIni] || "").split("/")[1] || "2024") : "2024",
-          reducaoMesFim: colRedFim >= 0 ? String(row[colRedFim] || "").split("/")[0] : "12",
-          reducaoAnoFim: colRedFim >= 0 ? (String(row[colRedFim] || "").split("/")[1] || "2024") : "2024",
-          consumoMedio: colConsMedio >= 0 ? String(row[colConsMedio] || "") : "",
-          consumoMedioReclamado: colConsRecl >= 0 ? String(row[colConsRecl] || "") : "",
-          historicoConsumoInicio: colHistIni >= 0 ? String(row[colHistIni] || "") : "",
-          historicoConsumoFim: colHistFim >= 0 ? String(row[colHistFim] || "") : "",
-          historicoConsumoCsv: colCsv >= 0 ? String(row[colCsv] || "") : "",
-          quesitosJuizo: colQJuizo >= 0 ? String(row[colQJuizo] || "") : "",
-          quesitosAutor: colQAutor >= 0 ? String(row[colQAutor] || "") : "",
-          quesitosReu: colQReu >= 0 ? String(row[colQReu] || "") : ""
-        }
-      };
+      linhaEscolhida = r;
+      break;
     }
+  }
+
+  // Se houver apenas 1 registro de dados na planilha e ainda não bateu, usa ele
+  if (linhaEscolhida === -1 && dataRange.length === 2) {
+    linhaEscolhida = 1;
+  }
+
+  if (linhaEscolhida >= 1) {
+    var rowTarget = dataRange[linhaEscolhida];
+    return {
+      linha: linhaEscolhida + 1,
+      colunaStatus: colStatus >= 0 ? colStatus + 1 : 26,
+      colunaLink: colLink >= 0 ? colLink + 1 : 27,
+      dados: {
+        tipoAcao: colTipo >= 0 ? String(rowTarget[colTipo] || "Consumo") : "Consumo",
+        numeroProcesso: colProc >= 0 ? String(rowTarget[colProc] || "") : (numeroProcessoBuscado || ""),
+        nomeAutor: colAutor >= 0 ? String(rowTarget[colAutor] || "") : (nomeAutorBuscado || ""),
+        nomeReu: colReu >= 0 ? String(rowTarget[colReu] || "") : "",
+        varaJuizo: colVara >= 0 ? String(rowTarget[colVara] || "") : "",
+        numeroCliente: colCliente >= 0 ? String(rowTarget[colCliente] || "") : "",
+        numeroToi: colToi >= 0 ? String(rowTarget[colToi] || "") : "",
+        dataLavraturaToi: colDataToi >= 0 ? String(rowTarget[colDataToi] || "") : "",
+        irregularidadeAlegada: colIrreg >= 0 ? String(rowTarget[colIrreg] || "") : "",
+        valorRecuperacao: colValRec >= 0 ? String(rowTarget[colValRec] || "") : "",
+        enderecoPericia: colEnd >= 0 ? String(rowTarget[colEnd] || "") : "",
+        objetivoPericia: colObj >= 0 ? String(rowTarget[colObj] || "") : "",
+        resumoProcesso: colResumo >= 0 ? String(rowTarget[colResumo] || "") : "",
+        alegacoesAutor: colAleg >= 0 ? String(rowTarget[colAleg] || "") : "",
+        contestacoesReu: colCont >= 0 ? String(rowTarget[colCont] || "") : "",
+        reducaoMesInicio: colRedIni >= 0 ? String(rowTarget[colRedIni] || "").split("/")[0] : "01",
+        reducaoAnoInicio: colRedIni >= 0 ? (String(rowTarget[colRedIni] || "").split("/")[1] || "2024") : "2024",
+        reducaoMesFim: colRedFim >= 0 ? String(rowTarget[colRedFim] || "").split("/")[0] : "12",
+        reducaoAnoFim: colRedFim >= 0 ? (String(rowTarget[colRedFim] || "").split("/")[1] || "2024") : "2024",
+        consumoMedio: colConsMedio >= 0 ? String(rowTarget[colConsMedio] || "") : "",
+        consumoMedioReclamado: colConsRecl >= 0 ? String(rowTarget[colConsRecl] || "") : "",
+        historicoConsumoInicio: colHistIni >= 0 ? String(rowTarget[colHistIni] || "") : "",
+        historicoConsumoFim: colHistFim >= 0 ? String(rowTarget[colHistFim] || "") : "",
+        historicoConsumoCsv: colCsv >= 0 ? String(rowTarget[colCsv] || "") : "",
+        quesitosJuizo: colQJuizo >= 0 ? String(rowTarget[colQJuizo] || "") : "",
+        quesitosAutor: colQAutor >= 0 ? String(rowTarget[colQAutor] || "") : "",
+        quesitosReu: colQReu >= 0 ? String(rowTarget[colQReu] || "") : ""
+      }
+    };
   }
 
   return null;
@@ -657,10 +674,12 @@ function extrairDadosPreVistoriaDinamico(sheetPre, numeroProcessoBuscado, nomeAu
 
 function buscarAbaFlexivel(ss, nomeDesejado) {
   var sheets = ss.getSheets();
-  var nomeLimpo = nomeDesejado.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  var alvoLimpo = String(nomeDesejado || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
   for (var i = 0; i < sheets.length; i++) {
-    var sheetName = sheets[i].getName().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-    if (sheetName === nomeLimpo) return sheets[i];
+    var nomeAbaLimpo = String(sheets[i].getName() || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    if (nomeAbaLimpo === alvoLimpo || nomeAbaLimpo.indexOf(alvoLimpo) !== -1 || alvoLimpo.indexOf(nomeAbaLimpo) !== -1) {
+      return sheets[i];
+    }
   }
   return null;
 }
