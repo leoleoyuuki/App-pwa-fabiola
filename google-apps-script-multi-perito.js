@@ -105,7 +105,7 @@ function doGet(e) {
         return ContentService.createTextOutput(JSON.stringify([])).setMimeType(ContentService.MimeType.JSON);
       }
 
-      var dataProcessos = sheetProcessos.getDataRange().getValues();
+      var dataProcessos = sheetProcessos.getDataRange().getDisplayValues();
       if (dataProcessos.length <= 1) {
         return ContentService.createTextOutput(JSON.stringify([])).setMimeType(ContentService.MimeType.JSON);
       }
@@ -526,7 +526,7 @@ function acharIndiceColuna(headersArray, aliases) {
  * Extrai dados da aba "Processos Energia" dinamicamente pelas 26 colunas oficiais
  */
 function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, nomeAutorBuscado) {
-  var dataRange = sheetProcessos.getDataRange().getValues();
+  var dataRange = sheetProcessos.getDataRange().getDisplayValues();
   if (dataRange.length <= 1) return null;
 
   var headers = dataRange[0];
