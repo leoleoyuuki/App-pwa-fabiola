@@ -86,6 +86,7 @@ function App() {
     const clean = email.toLowerCase().trim();
     if (clean === 'rodrigues.periciajud@gmail.com') return 'Perito: Rodrigues';
     if (clean === 'leok.perito@gmail.com') return 'Perito: Leo K.';
+    if (clean === 'leoyuuki@dev.com') return 'Dev: Leo Yuuki';
     return `Perito: ${email.split('@')[0]}`;
   };
 
