@@ -4,7 +4,7 @@
  * =========================================================================
  * Contempla:
  *  - Chave Mestre ON/OFF para Ativar/Desativar Geração de Laudo Automático
- *  - Leitura prioritária da aba "Processos Energia" (ou Processos Água / Imobiliário / Gás / Pré-Vistoria)
+ *  - Separação estrita entre "Processos Energia" (Agendamentos/Pré-Vistoria) e "Energia" (Relatórios Enviados)
  *  - Mapeamento dinâmico e flexível de colunas (Histórico de Consumo CSV Multilinha, Quesitos, etc.)
  *  - Exportação e salvamento de todos os arquivos fontes (.pdf, dados.tex, historico_consumo.csv, modelo_auto.tex) na pasta do Google Drive
  *  - Roteamento por perito (Rodrigues, Leo K., Leo Yuuki Dev)
@@ -77,27 +77,31 @@ function doGet(e) {
     var action = e && e.parameter ? e.parameter.action : "";
     var tipo = e && e.parameter && e.parameter.tipo ? e.parameter.tipo.toLowerCase().trim() : "energia";
 
-    // CASO 1: Busca a lista de Processos / Pré-Vistorias
+    // CASO 1: Busca a lista de Processos Agendados para o formulário PWA
+    var mapaAbasProcessos = {
+      "energia": "Processos Energia",
+      "agua": "Processos Água",
+      "imobiliario": "Processos Imobiliário",
+      "gas": "Processos Gás"
+    };
+    var nomeAbaProcessos = mapaAbasProcessos[tipo] || "Processos Energia";
+
     if (action === "processos" || action === "previstoria") {
-      var sheetProcessos = obterAbaProcessosPreVistoria(ss, tipo);
+      var sheetProcessos = buscarAbaFlexivel(ss, nomeAbaProcessos) || buscarAbaFlexivel(ss, "Processos") || buscarAbaFlexivel(ss, "Pré-Vistoria");
+      
       if (!sheetProcessos) {
-        var mapaNomePadrao = {
-          "energia": "Processos Energia",
-          "agua": "Processos Água",
-          "imobiliario": "Processos Imobiliário",
-          "gas": "Processos Gás"
-        };
-        var nomeCriar = mapaNomePadrao[tipo] || "Processos Energia";
-        sheetProcessos = ss.insertSheet(nomeCriar);
+        sheetProcessos = ss.insertSheet(nomeAbaProcessos);
         sheetProcessos.appendRow([
-          "Tipo de Ação", "Número do Processo", "Nome do Autor", "Nome do Réu", "Vara / Comarca",
-          "Número do Cliente", "Número do TOI", "Data Lavratura TOI", "Irregularidade Alegada (Gato)",
-          "Valor Recuperação (R$)", "Endereço Completo", "Objetivo da Perícia", "Resumo do Processo",
-          "Alegações do Autor", "Contestações do Réu", "Início Redução (Mês/Ano)", "Fim Redução (Mês/Ano)",
-          "Consumo Médio (kWh)", "Consumo Reclamado (kWh)", "Histórico Consumo Início", "Histórico Consumo Fim",
-          "Histórico de Consumo (CSV Multilinha)", "Quesitos Juízo", "Quesitos Autor", "Quesitos Réu", "Status Automação", "Link Laudo PDF"
+          "Tipo de Ação (Consumo / TOI)", "Número do Processo (CNJ)", "Nome do Autor", "Nome do Réu", "Vara / Comarca",
+          "Número do Cliente / Instalação", "Número do TOI", "Data de Lavratura do TOI", "Irregularidade Alegada (Gato / Desvio)",
+          "Valor de Recuperação Cobrado (R$)", "Endereço Completo da Perícia", "Objetivo da Perícia", "Resumo do Processo",
+          "Alegações do Autor (formatado com \)", "Contestações do Réu (formatado com \)", "Início Período Controvertido (Mês/Ano)",
+          "Fim Período Controvertido (Mês/Ano)", "Consumo Médio Regular (kWh)", "Consumo Médio Reclamado (kWh)",
+          "Data Início Histórico Faturas", "Data Fim Histórico Faturas", "Histórico de Consumo (CSV Multilinha)",
+          "Quesitos do Juízo (Brutos)", "Quesitos do Autor (Brutos)", "Quesitos do Réu (Brutos)",
+          "Status da Automação (Pronto para Vistoria / Aguardando Campo / Concluído)"
         ]);
-        sheetProcessos.autoResizeColumns(1, 27);
+        sheetProcessos.autoResizeColumns(1, 26);
         return ContentService.createTextOutput(JSON.stringify([])).setMimeType(ContentService.MimeType.JSON);
       }
 
@@ -107,40 +111,45 @@ function doGet(e) {
       }
 
       var headers = dataProcessos[0];
+      var colProc = acharIndiceColuna(headers, ["numerodoprocessocnj", "numerodoprocesso", "processo", "numprocesso", "cnj"]);
+      var colAutor = acharIndiceColuna(headers, ["nomedoautor", "autor", "parteautora"]);
+      var colReu = acharIndiceColuna(headers, ["nomedoreu", "reu", "concessionaria"]);
+      var colTipo = acharIndiceColuna(headers, ["tipodeacaoconsumotoi", "tipodeacao", "tipoacao", "acao"]);
+      var colData = acharIndiceColuna(headers, ["datadavistoria", "datavistoria", "data", "datalavratura"]);
+
       var arrayProcessos = [];
 
       for (var i = 1; i < dataProcessos.length; i++) {
         var row = dataProcessos[i];
         if (!row[0] && !row[1] && !row[2]) continue;
 
-        var record = {};
-        for (var c = 0; c < headers.length; c++) {
-          var hName = headers[c] ? headers[c].toString().trim() : ("col_" + c);
-          var val = row[c];
-          if (val instanceof Date) {
-            val = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
-          }
-          record[hName] = val;
+        var dataVistoriaVal = colData >= 0 ? row[colData] : (row[0] || "");
+        if (dataVistoriaVal instanceof Date) {
+          dataVistoriaVal = Utilities.formatDate(dataVistoriaVal, Session.getScriptTimeZone(), "yyyy-MM-dd");
+        } else if (dataVistoriaVal) {
+          dataVistoriaVal = dataVistoriaVal.toString().trim();
+        } else {
+          dataVistoriaVal = "";
         }
 
-        // Mapeamento compatível para dropdowns do formulário
-        var colProc = acharIndiceColuna(headers, ["numerodoprocesso", "processo", "numprocesso", "cnj"]);
-        var colAutor = acharIndiceColuna(headers, ["nomedoautor", "autor", "parteautora"]);
-        var colReu = acharIndiceColuna(headers, ["nomedoreu", "reu", "concessionaria"]);
-        var colData = acharIndiceColuna(headers, ["datadavistoria", "datavistoria", "data"]);
+        var procVal = colProc >= 0 ? String(row[colProc] || "").trim() : (row[1] || "");
+        var autorVal = colAutor >= 0 ? String(row[colAutor] || "").trim() : (row[2] || "");
+        var reuVal = colReu >= 0 ? String(row[colReu] || "").trim() : (row[3] || "");
+        var tipoVal = colTipo >= 0 ? String(row[colTipo] || "Consumo").trim() : "Consumo";
 
-        record.numeroProcesso = colProc >= 0 ? String(row[colProc] || "") : (row[1] || "");
-        record.nomeAutor = colAutor >= 0 ? String(row[colAutor] || "") : (row[2] || "");
-        record.reuConcessionaria = colReu >= 0 ? String(row[colReu] || "") : (row[3] || "");
-        record.dataVistoria = colData >= 0 ? String(row[colData] || "") : (row[0] || "");
-
-        arrayProcessos.push(record);
+        arrayProcessos.push({
+          dataVistoria: dataVistoriaVal,
+          nomeAutor: autorVal,
+          numeroProcesso: procVal,
+          reuConcessionaria: reuVal,
+          tipoAcao: tipoVal
+        });
       }
 
       return ContentService.createTextOutput(JSON.stringify(arrayProcessos)).setMimeType(ContentService.MimeType.JSON);
     }
     
-    // CASO 2: Busca histórico geral de Relatórios Enviados
+    // CASO 2: Busca histórico geral de Relatórios Enviados na aba "Energia"
     var mapaAbasLaudos = {
       "energia": "Energia",
       "agua": "Água",
@@ -227,77 +236,6 @@ function doPost(e) {
     var ss = SpreadsheetApp.openById(spreadsheetId);
     var tipo = (data.tipoAcao || data.tipoInspecao || "energia").toLowerCase().trim();
 
-    // 2.1 GRAVAÇÃO DE DADOS DE PRÉ-VISTORIA (Extraídos pelo Gemini Spark)
-    if (data.action === "salvar_previstoria") {
-      var sheetDestino = obterAbaProcessosPreVistoria(ss, tipo);
-      if (!sheetDestino) {
-        sheetDestino = ss.insertSheet("Processos Energia");
-        sheetDestino.appendRow([
-          "Tipo de Ação", "Número do Processo", "Nome do Autor", "Nome do Réu", "Vara / Comarca",
-          "Número do Cliente", "Número do TOI", "Data Lavratura TOI", "Irregularidade Alegada (Gato)",
-          "Valor Recuperação (R$)", "Endereço Completo", "Objetivo da Perícia", "Resumo do Processo",
-          "Alegações do Autor", "Contestações do Réu", "Início Redução (Mês/Ano)", "Fim Redução (Mês/Ano)",
-          "Consumo Médio (kWh)", "Consumo Reclamado (kWh)", "Histórico Consumo Início", "Histórico Consumo Fim",
-          "Histórico de Consumo (CSV Multilinha)", "Quesitos Juízo", "Quesitos Autor", "Quesitos Réu", "Status Automação", "Link Laudo PDF"
-        ]);
-        sheetDestino.autoResizeColumns(1, 27);
-      }
-
-      var numProcessoLimpo = (data.numeroProcesso || "").replace(/[^0-9]/g, "");
-      var dataPreRows = sheetDestino.getDataRange().getValues();
-      var linhaExistente = -1;
-
-      for (var r = 1; r < dataPreRows.length; r++) {
-        var procRowLimpo = String(dataPreRows[r][1] || "").replace(/[^0-9]/g, "");
-        if (procRowLimpo && procRowLimpo === numProcessoLimpo) {
-          linhaExistente = r + 1;
-          break;
-        }
-      }
-
-      var novaLinhaPre = [
-        data.tipoAcao || "Consumo",
-        data.numeroProcesso || "",
-        capitalizarNome(data.nomeAutor || ""),
-        data.nomeReu || data.reuConcessionaria || "",
-        data.varaJuizo || "",
-        data.numeroCliente || "",
-        data.numeroToi || "",
-        data.dataLavraturaToi || "",
-        data.irregularidadeAlegada || "",
-        data.valorRecuperacao || "",
-        data.enderecoPericia || "",
-        data.objetivoPericia || "",
-        data.resumoProcesso || "",
-        data.alegacoesAutor || "",
-        data.contestacoesReu || "",
-        data.reducaoMesInicio ? (data.reducaoMesInicio + "/" + (data.reducaoAnoInicio || "")) : "",
-        data.reducaoMesFim ? (data.reducaoMesFim + "/" + (data.reducaoAnoFim || "")) : "",
-        data.consumoMedio || "",
-        data.consumoMedioReclamado || "",
-        data.historicoConsumoInicio || "",
-        data.historicoConsumoFim || "",
-        data.historicoConsumoCsv || "",
-        data.quesitosJuizo || "",
-        data.quesitosAutor || "",
-        data.quesitosReu || "",
-        "Pré-Vistoria Concluída (Aguardando Campo)",
-        ""
-      ];
-
-      if (linhaExistente > 0) {
-        sheetDestino.getRange(linhaExistente, 1, 1, novaLinhaPre.length).setValues([novaLinhaPre]);
-      } else {
-        sheetDestino.appendRow(novaLinhaPre);
-      }
-
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "sucesso",
-        message: "Pré-Vistoria registrada com sucesso na aba " + sheetDestino.getName() + ".",
-        perito: config.nome
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    
     var nomeAutorOriginal = data.nomeAutor || "Autor Sem Nome";
     var nomeAutor = capitalizarNome(nomeAutorOriginal);
     
@@ -345,7 +283,7 @@ function doPost(e) {
       urlsFotosMedidor = salvarFotosBase64(data.photosMedidor, subfolderMedidor, "Medidor_");
     }
     
-    // 3. Gravação na Planilha de Vistorias
+    // 3. Gravação na Planilha de Vistorias na aba "Energia" (Relatórios)
     var mapaAbas = {
       "energia": "Energia",
       "agua": "Água",
@@ -423,9 +361,17 @@ function doPost(e) {
     sheet.appendRow(novaLinha);
     cache.put(cacheKey, "gravado", 21600);
 
-    // 4. Integração Pré-Vistoria (Lê de "Processos Energia" ou "Pré-Vistoria")
+    // 4. Integração Pré-Vistoria: Lê estritamente de "Processos Energia"
     var urlLaudoGerado = "";
-    var sheetProcessosRef = obterAbaProcessosPreVistoria(ss, tipo);
+    var mapaProcessosAba = {
+      "energia": "Processos Energia",
+      "agua": "Processos Água",
+      "imobiliario": "Processos Imobiliário",
+      "gas": "Processos Gás"
+    };
+    var nomeAbaProcAlvo = mapaProcessosAba[tipo] || "Processos Energia";
+    var sheetProcessosRef = buscarAbaFlexivel(ss, nomeAbaProcAlvo) || buscarAbaFlexivel(ss, "Processos") || buscarAbaFlexivel(ss, "Pré-Vistoria");
+    
     var dadosPreVistoria = null;
     var linhaProcessoEncontrada = -1;
     var extraido = null;
@@ -534,37 +480,31 @@ function doPost(e) {
 
 /**
  * =========================================================================
- * FUNÇÕES AUXILIARES DE PRÉ-VISTORIA E FORMATAÇÃO
+ * FUNÇÕES AUXILIARES DE BUSCA DE ABAS E MAPEAMENTO DE COLUNAS
  * =========================================================================
  */
 
 /**
- * Obtém a aba de Processos / Pré-Vistoria priorizando "Processos Energia", etc.
+ * Busca de abas com prioridade estrita de correspondência exata para evitar conflito entre "Energia" e "Processos Energia"
  */
-function obterAbaProcessosPreVistoria(ss, tipo) {
-  var tipoLimpo = (tipo || "energia").toLowerCase().trim();
-  var mapa = {
-    "energia": "Processos Energia",
-    "agua": "Processos Água",
-    "imobiliario": "Processos Imobiliário",
-    "gas": "Processos Gás"
-  };
-  var nomeDesejado = mapa[tipoLimpo] || ("Processos " + tipoLimpo);
-  
-  var sheet = buscarAbaFlexivel(ss, nomeDesejado);
-  if (sheet) return sheet;
+function buscarAbaFlexivel(ss, nomeDesejado) {
+  if (!ss || !nomeDesejado) return null;
+  var sheets = ss.getSheets();
+  var alvoLimpo = String(nomeDesejado).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 
-  sheet = buscarAbaFlexivel(ss, "Processos");
-  if (sheet) return sheet;
+  // 1. PRIORIDADE ABSOLUTA: Correspondência Exata
+  for (var i = 0; i < sheets.length; i++) {
+    var nomeAbaLimpo = String(sheets[i].getName() || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    if (nomeAbaLimpo === alvoLimpo) {
+      return sheets[i];
+    }
+  }
 
-  sheet = buscarAbaFlexivel(ss, "Pré-Vistoria") || buscarAbaFlexivel(ss, "Pre-Vistoria") || buscarAbaFlexivel(ss, "PreVistoria");
-  if (sheet) return sheet;
-
-  var allSheets = ss.getSheets();
-  for (var i = 0; i < allSheets.length; i++) {
-    var n = allSheets[i].getName().toLowerCase();
-    if (n.indexOf("processo") !== -1 || n.indexOf("previstoria") !== -1 || n.indexOf("pre-vistoria") !== -1) {
-      return allSheets[i];
+  // 2. SEGUNDA PRIORIDADE: O nome da aba contém o nome desejado (apenas se não houver exata)
+  for (var j = 0; j < sheets.length; j++) {
+    var nAbaLimpo = String(sheets[j].getName() || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    if (nAbaLimpo.indexOf(alvoLimpo) !== -1) {
+      return sheets[j];
     }
   }
 
@@ -583,7 +523,7 @@ function acharIndiceColuna(headersArray, aliases) {
 }
 
 /**
- * Extrai dados da aba de Processos dinamicamente por correspondência flexível de cabeçalhos
+ * Extrai dados da aba "Processos Energia" dinamicamente pelas 26 colunas oficiais
  */
 function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, nomeAutorBuscado) {
   var dataRange = sheetProcessos.getDataRange().getValues();
@@ -591,32 +531,32 @@ function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, 
 
   var headers = dataRange[0];
 
-  var colProc = acharIndiceColuna(headers, ["numerodoprocesso", "processo", "numprocesso", "cnj"]);
+  var colTipo = acharIndiceColuna(headers, ["tipodeacaoconsumotoi", "tipodeacao", "tipoacao", "acao"]);
+  var colProc = acharIndiceColuna(headers, ["numerodoprocessocnj", "numerodoprocesso", "processo", "numprocesso", "cnj"]);
   var colAutor = acharIndiceColuna(headers, ["nomedoautor", "autor", "parteautora"]);
   var colReu = acharIndiceColuna(headers, ["nomedoreu", "reu", "concessionaria", "empresa"]);
-  var colTipo = acharIndiceColuna(headers, ["tipodeacao", "tipoacao", "acao", "objeto"]);
   var colVara = acharIndiceColuna(headers, ["varacomarca", "vara", "juizo", "comarca"]);
-  var colCliente = acharIndiceColuna(headers, ["numerodocliente", "cliente", "instalacao", "uc"]);
+  var colCliente = acharIndiceColuna(headers, ["numerodoclienteinstalacao", "numerodocliente", "cliente", "instalacao", "uc"]);
   var colToi = acharIndiceColuna(headers, ["numerodotoi", "toi", "numtoi"]);
   var colDataToi = acharIndiceColuna(headers, ["datalavraturatoi", "datalavratura"]);
-  var colIrreg = acharIndiceColuna(headers, ["irregularidadealegada", "irregularidade", "gato"]);
-  var colValRec = acharIndiceColuna(headers, ["valorrecuperacao", "valorrecuperado", "recuperacaoconsumo"]);
-  var colEnd = acharIndiceColuna(headers, ["enderecocompleto", "endereco", "local"]);
+  var colIrreg = acharIndiceColuna(headers, ["irregularidadealegadagatodesvio", "irregularidadealegada", "irregularidade", "gato"]);
+  var colValRec = acharIndiceColuna(headers, ["valorderecuperacaocobrador", "valorrecuperacao", "valorrecuperado", "recuperacaoconsumo"]);
+  var colEnd = acharIndiceColuna(headers, ["enderecocompletodapericia", "enderecocompleto", "endereco", "local"]);
   var colObj = acharIndiceColuna(headers, ["objetivodapericia", "objetivo", "escopo"]);
   var colResumo = acharIndiceColuna(headers, ["resumodoprocesso", "resumo", "sintese"]);
-  var colAleg = acharIndiceColuna(headers, ["alegacoesdoautor", "alegacoesautor", "fatosautor"]);
-  var colCont = acharIndiceColuna(headers, ["contestacoesdoreu", "contestacoesreu", "fatosreu"]);
-  var colRedIni = acharIndiceColuna(headers, ["inicioreducao", "reducaoinicio"]);
-  var colRedFim = acharIndiceColuna(headers, ["fimreducao", "reducaofim"]);
-  var colConsMedio = acharIndiceColuna(headers, ["consumomedio", "consumoregular", "mediaregular", "consumomediokwh"]);
-  var colConsRecl = acharIndiceColuna(headers, ["consumoreclamado", "consumomedioreclamado", "mediareclamada", "consumoreclamadokwh"]);
-  var colHistIni = acharIndiceColuna(headers, ["historicoconsumoinicio", "datainiciohistorico"]);
-  var colHistFim = acharIndiceColuna(headers, ["historicoconsumofim", "datafimhistorico"]);
-  var colCsv = acharIndiceColuna(headers, ["historicoconsumo", "historicoconsumocsv", "csvconsumo", "csv", "faturas", "leituras"]);
-  var colQJuizo = acharIndiceColuna(headers, ["quesitosjuizo", "quesitosdojuizo", "quesitosjuiz"]);
-  var colQAutor = acharIndiceColuna(headers, ["quesitosautor", "quesitosdoautor", "quesitosautora"]);
-  var colQReu = acharIndiceColuna(headers, ["quesitosreu", "quesitosdoreu", "quesitosconcessionaria"]);
-  var colStatus = acharIndiceColuna(headers, ["statusautomacao", "status"]);
+  var colAleg = acharIndiceColuna(headers, ["alegacoesdoautorformatadocom", "alegacoesdoautor", "alegacoesautor", "fatosautor"]);
+  var colCont = acharIndiceColuna(headers, ["contestacoesdoreuformatadocom", "contestacoesdoreu", "contestacoesreu", "fatosreu"]);
+  var colRedIni = acharIndiceColuna(headers, ["inicioperiodocontrovertidomesano", "inicioreducao", "reducaoinicio"]);
+  var colRedFim = acharIndiceColuna(headers, ["fimperiodocontrovertidomesano", "fimreducao", "reducaofim"]);
+  var colConsMedio = acharIndiceColuna(headers, ["consumomedioregularkwh", "consumomedio", "consumoregular", "mediaregular"]);
+  var colConsRecl = acharIndiceColuna(headers, ["consumomedioreclamadokwh", "consumoreclamado", "consumomedioreclamado", "mediareclamada"]);
+  var colHistIni = acharIndiceColuna(headers, ["datainiciohistoricofaturas", "historicoconsumoinicio", "datainiciohistorico"]);
+  var colHistFim = acharIndiceColuna(headers, ["datafimhistoricofaturas", "historicoconsumofim", "datafimhistorico"]);
+  var colCsv = acharIndiceColuna(headers, ["historicodeconsumocsvmultilinha", "historicoconsumo", "historicoconsumocsv", "csvconsumo", "csv", "faturas", "leituras"]);
+  var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosjuizo", "quesitosdojuizo", "quesitosjuiz"]);
+  var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosautor", "quesitosdoautor", "quesitosautora"]);
+  var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosreu", "quesitosdoreu", "quesitosconcessionaria"]);
+  var colStatus = acharIndiceColuna(headers, ["statusdaautomacao", "statusautomacao", "status"]);
   var colLink = acharIndiceColuna(headers, ["linklaudopdf", "laudopdf", "linkpdf", "laudo"]);
 
   var procBuscadoLimpo = (numeroProcessoBuscado || "").toString().replace(/[^0-9]/g, "");
@@ -682,18 +622,6 @@ function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, 
     };
   }
 
-  return null;
-}
-
-function buscarAbaFlexivel(ss, nomeDesejado) {
-  var sheets = ss.getSheets();
-  var alvoLimpo = String(nomeDesejado || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-  for (var i = 0; i < sheets.length; i++) {
-    var nomeAbaLimpo = String(sheets[i].getName() || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-    if (nomeAbaLimpo === alvoLimpo || nomeAbaLimpo.indexOf(alvoLimpo) !== -1 || alvoLimpo.indexOf(nomeAbaLimpo) !== -1) {
-      return sheets[i];
-    }
-  }
   return null;
 }
 
