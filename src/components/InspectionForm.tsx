@@ -125,7 +125,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   // Scheduled processes state for offline prefilling & Agenda
   const [scheduledProcesses, setScheduledProcesses] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFilterMode, setDateFilterMode] = useState<'today' | 'custom' | 'all'>('today');
+  const [dateFilterMode, setDateFilterMode] = useState<'today' | 'custom' | 'all'>('all');
   const [selectedFilterDate, setSelectedFilterDate] = useState<string>(getTodayDateString());
   const [isSyncingProcesses, setIsSyncingProcesses] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
@@ -616,12 +616,17 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   const applyProcess = (p: any) => {
     if (p.nomeAutor) setNomeAutor(p.nomeAutor);
     if (p.numeroProcesso) setNumeroProcesso(p.numeroProcesso);
-    if (p.reuConcessionaria) setReuConcessionaria(p.reuConcessionaria);
+    if (p.reuConcessionaria || p.nomeReu) setReuConcessionaria(p.reuConcessionaria || p.nomeReu);
+    if (p.tipoAcao) {
+      setTipoAcao(p.tipoAcao.toUpperCase().includes('TOI') ? 'TOI' : 'Consumo');
+    }
     if (p.dataVistoria) {
       const normDate = normalizeDate(p.dataVistoria);
       if (normDate) setDataVistoria(normDate);
+    } else {
+      setDataVistoria(getTodayDateString());
     }
-    setDraftSavedAt(`Preenchido: ${p.nomeAutor}`);
+    setDraftSavedAt(`Preenchido: ${p.nomeAutor} (${p.tipoAcao || 'Consumo'})`);
   };
 
   return (
@@ -830,7 +835,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
                     <option value="" disabled>-- Toque para escolher a vistoria --</option>
                     {filteredProcesses.map((p, idx) => (
                       <option key={idx} value={idx}>
-                        {p.nomeAutor} — {p.reuConcessionaria} {p.dataVistoria ? `(${formatDisplayDate(p.dataVistoria)})` : ''}
+                        {p.nomeAutor} {p.tipoAcao ? `[${p.tipoAcao}]` : ''} — {p.numeroProcesso ? `${p.numeroProcesso} | ` : ''}{p.reuConcessionaria || ''}
                       </option>
                     ))}
                   </select>
