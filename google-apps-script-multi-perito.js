@@ -4,22 +4,19 @@
  * =========================================================================
  * Contempla:
  *  - Chave Mestre ON/OFF para Ativar/Desativar Geração de Laudo Automático
- *  - Roteamento inteligente por perito (Rodrigues, Leo K., Leo Yuuki Dev)
- *  - Gestão e Busca da aba "Pré-Vistoria" (Ingestão de processos pelo Gemini Spark)
- *  - Validação de e-mail cadastrado com diagnóstico claro
+ *  - Mapeamento dinâmico e flexível de colunas da aba "Pré-Vistoria"
+ *  - Exportação e salvamento de todos os arquivos fontes (.pdf, dados.tex, historico_consumo.csv, modelo_auto.tex) na pasta do Google Drive
+ *  - Roteamento por perito (Rodrigues, Leo K., Leo Yuuki Dev)
  *  - Dupla camada anti-duplicidade (Cache do Google + Verificação das últimas 30 linhas)
- *  - Tratamento inteligente de datas (Data de Envio com HH:mm:ss e Data da Vistoria limpa)
- *  - Criação e formatação automática de cabeçalhos
- *  - Organização de pastas (Fotos da Residência e Fotos do Medidor) com numeração sequencial
- *  - Integração com Microserviço LaTeX & AI Pericial Engine
+ *  - Organização de fotos (Fotos da Residência e Fotos do Medidor) com numeração sequencial
  */
 
 // ⚙️ 1. CONFIGURAÇÃO GERAL DA AUTOMAÇÃO E COMPILAÇÃO DE LAUDOS
 var CONFIG_AUTOMACAO = {
   // 🔘 CHAVE MESTRE (ON / OFF):
   // false = DESLIGADO (Apenas salva fotos no Drive e grava na Planilha)
-  // true  = LIGADO (Salva fotos/dados E dispara o microserviço para compilar o PDF Oficial)
-  ATIVAR_GERACAO_LAUDO_AUTOMATICA: false,
+  // true  = LIGADO (Salva fotos/dados E dispara o microserviço para compilar o PDF Oficial e fontes)
+  ATIVAR_GERACAO_LAUDO_AUTOMATICA: true,
 
   // 🌐 URL do Microserviço Backend de Compilação LaTeX (Vercel / Cloud Run)
   URL_MICROSERVICO_LAUDO: "https://automacao-latex.vercel.app"
@@ -90,7 +87,7 @@ function doGet(e) {
           "Valor Recuperação (R$)", "Endereço Completo", "Objetivo da Perícia", "Resumo do Processo",
           "Alegações do Autor", "Contestações do Réu", "Início Redução (Mês/Ano)", "Fim Redução (Mês/Ano)",
           "Consumo Médio (kWh)", "Consumo Reclamado (kWh)", "Histórico Consumo Início", "Histórico Consumo Fim",
-          "Histórico Consumo CSV", "Quesitos Juízo", "Quesitos Autor", "Quesitos Réu", "Status Automação", "Link Laudo PDF"
+          "Histórico de Consumo (CSV Multilinha)", "Quesitos Juízo", "Quesitos Autor", "Quesitos Réu", "Status Automação", "Link Laudo PDF"
         ]);
         sheetPre.autoResizeColumns(1, 27);
         return ContentService.createTextOutput(JSON.stringify([])).setMimeType(ContentService.MimeType.JSON);
@@ -105,7 +102,7 @@ function doGet(e) {
       var listaPre = [];
       for (var p = 1; p < dataPre.length; p++) {
         var rowP = dataPre[p];
-        if (!rowP[1] && !rowP[2]) continue;
+        if (!rowP[0] && !rowP[1] && !rowP[2]) continue;
         var itemPre = {};
         for (var c = 0; c < headersPre.length; c++) {
           var hName = headersPre[c].toString().trim();
@@ -261,7 +258,7 @@ function doPost(e) {
           "Valor Recuperação (R$)", "Endereço Completo", "Objetivo da Perícia", "Resumo do Processo",
           "Alegações do Autor", "Contestações do Réu", "Início Redução (Mês/Ano)", "Fim Redução (Mês/Ano)",
           "Consumo Médio (kWh)", "Consumo Reclamado (kWh)", "Histórico Consumo Início", "Histórico Consumo Fim",
-          "Histórico Consumo CSV", "Quesitos Juízo", "Quesitos Autor", "Quesitos Réu", "Status Automação", "Link Laudo PDF"
+          "Histórico de Consumo (CSV Multilinha)", "Quesitos Juízo", "Quesitos Autor", "Quesitos Réu", "Status Automação", "Link Laudo PDF"
         ]);
         sheetPre.autoResizeColumns(1, 27);
       }
@@ -447,45 +444,18 @@ function doPost(e) {
     sheet.appendRow(novaLinha);
     cache.put(cacheKey, "gravado", 21600);
 
-    // 4. Integração Pré-Vistoria e Geração Automática de Laudo (se Chave ON)
+    // 4. Integração Pré-Vistoria (Extração Robusta e Flexível por Nomes de Cabeçalho)
     var urlLaudoGerado = "";
     var sheetPreCheck = buscarAbaFlexivel(ss, "Pré-Vistoria");
     var dadosPreVistoria = null;
+    var linhaPreVistoriaEncontrada = -1;
 
     if (sheetPreCheck) {
-      var numProcLimpo = (data.numeroProcesso || "").replace(/[^0-9]/g, "");
-      var rowsPre = sheetPreCheck.getDataRange().getValues();
-      for (var rk = 1; rk < rowsPre.length; rk++) {
-        var procLimpo = String(rowsPre[rk][1] || "").replace(/[^0-9]/g, "");
-        if (procLimpo && procLimpo === numProcLimpo) {
-          dadosPreVistoria = {
-            tipoAcao: rowsPre[rk][0],
-            numeroProcesso: rowsPre[rk][1],
-            nomeAutor: rowsPre[rk][2],
-            nomeReu: rowsPre[rk][3],
-            varaJuizo: rowsPre[rk][4],
-            numeroCliente: rowsPre[rk][5],
-            numeroToi: rowsPre[rk][6],
-            dataLavraturaToi: rowsPre[rk][7],
-            irregularidadeAlegada: rowsPre[rk][8],
-            valorRecuperacao: rowsPre[rk][9],
-            enderecoPericia: rowsPre[rk][10],
-            objetivoPericia: rowsPre[rk][11],
-            resumoProcesso: rowsPre[rk][12],
-            alegacoesAutor: rowsPre[rk][13],
-            contestacoesReu: rowsPre[rk][14],
-            consumoMedio: rowsPre[rk][17],
-            consumoMedioReclamado: rowsPre[rk][18],
-            historicoConsumoInicio: rowsPre[rk][19],
-            historicoConsumoFim: rowsPre[rk][20],
-            historicoConsumoCsv: rowsPre[rk][21],
-            quesitosJuizo: rowsPre[rk][22],
-            quesitosAutor: rowsPre[rk][23],
-            quesitosReu: rowsPre[rk][24]
-          };
-          sheetPreCheck.getRange(rk + 1, 26).setValue("Vistoria de Campo Concluída (Pronto para Laudo)");
-          break;
-        }
+      var extraido = extrairDadosPreVistoriaDinamico(sheetPreCheck, data.numeroProcesso, nomeAutor);
+      if (extraido) {
+        dadosPreVistoria = extraido.dados;
+        linhaPreVistoriaEncontrada = extraido.linha;
+        sheetPreCheck.getRange(linhaPreVistoriaEncontrada, extraido.colunaStatus || 26).setValue("Vistoria de Campo Concluída (Gerando Laudo...)");
       }
     }
 
@@ -513,25 +483,44 @@ function doPost(e) {
         var respService = UrlFetchApp.fetch(CONFIG_AUTOMACAO.URL_MICROSERVICO_LAUDO + "/api/gerar-laudo-completo", optionsFetch);
         var jsonResp = JSON.parse(respService.getContentText());
 
-        if (jsonResp && jsonResp.pdfBase64) {
-          var nomePdf = jsonResp.filename || ("Laudo_" + (data.numeroProcesso || "Pericia") + ".pdf");
-          var blobPdf = Utilities.newBlob(Utilities.base64Decode(jsonResp.pdfBase64), "application/pdf", nomePdf);
-          var pdfFile = inspectionFolder.createFile(blobPdf);
-          urlLaudoGerado = pdfFile.getUrl();
+        if (jsonResp) {
+          var prefixoArquivo = "Laudo_" + (jsonResp.tipoAcao || "Oficial") + "_" + (nomeAutor.replace(/\s+/g, '_'));
 
-          // Atualiza o link do PDF na planilha de vistorias
-          sheet.getRange(sheet.getLastRow(), 32).setValue(urlLaudoGerado);
+          // 1. Salva PDF Oficial no Drive
+          if (jsonResp.pdfBase64) {
+            var nomePdf = jsonResp.filename || (prefixoArquivo + ".pdf");
+            var blobPdf = Utilities.newBlob(Utilities.base64Decode(jsonResp.pdfBase64), "application/pdf", nomePdf);
+            var pdfFile = inspectionFolder.createFile(blobPdf);
+            urlLaudoGerado = pdfFile.getUrl();
+
+            // Atualiza o link do PDF na planilha de vistorias
+            sheet.getRange(sheet.getLastRow(), 32).setValue(urlLaudoGerado);
+          }
+
+          // 2. Salva dados.tex no Drive (para edição manual caso necessário)
+          if (jsonResp.dadosTex) {
+            var blobDadosTex = Utilities.newBlob(jsonResp.dadosTex, "text/plain; charset=utf-8", "dados.tex");
+            inspectionFolder.createFile(blobDadosTex);
+          }
+
+          // 3. Salva historico_consumo.csv no Drive
+          if (jsonResp.historicoCsv) {
+            var blobCsv = Utilities.newBlob(jsonResp.historicoCsv, "text/csv; charset=utf-8", "historico_consumo.csv");
+            inspectionFolder.createFile(blobCsv);
+          }
+
+          // 4. Salva modelo_auto.tex no Drive
+          if (jsonResp.modeloAutoTex) {
+            var blobModeloTex = Utilities.newBlob(jsonResp.modeloAutoTex, "text/plain; charset=utf-8", "modelo_auto.tex");
+            inspectionFolder.createFile(blobModeloTex);
+          }
 
           // Atualiza status e link na aba de Pré-Vistoria se existir
-          if (sheetPreCheck && dadosPreVistoria) {
-            for (var rk2 = 1; rk2 < rowsPre.length; rk2++) {
-              var procLimpo2 = String(rowsPre[rk2][1] || "").replace(/[^0-9]/g, "");
-              if (procLimpo2 && procLimpo2 === numProcLimpo) {
-                sheetPreCheck.getRange(rk2 + 1, 26).setValue("Laudo Oficial Gerado ✅");
-                sheetPreCheck.getRange(rk2 + 1, 27).setValue(urlLaudoGerado);
-                break;
-              }
-            }
+          if (sheetPreCheck && linhaPreVistoriaEncontrada > 0) {
+            var colStatus = (extraido && extraido.colunaStatus) ? extraido.colunaStatus : 26;
+            var colLink = (extraido && extraido.colunaLink) ? extraido.colunaLink : 27;
+            sheetPreCheck.getRange(linhaPreVistoriaEncontrada, colStatus).setValue("Laudo Oficial Gerado ✅");
+            sheetPreCheck.getRange(linhaPreVistoriaEncontrada, colLink).setValue(urlLaudoGerado);
           }
         }
       } catch (errLaudo) {
@@ -561,9 +550,111 @@ function doPost(e) {
 
 /**
  * =========================================================================
- * FUNÇÕES AUXILIARES
+ * FUNÇÕES AUXILIARES DE PRÉ-VISTORIA E FORMATAÇÃO
  * =========================================================================
  */
+
+/**
+ * Extrai dados da aba Pré-Vistoria dinamicamente por correspondência flexível de cabeçalhos
+ */
+function extrairDadosPreVistoriaDinamico(sheetPre, numeroProcessoBuscado, nomeAutorBuscado) {
+  var dataRange = sheetPre.getDataRange().getValues();
+  if (dataRange.length <= 1) return null;
+
+  var headers = dataRange[0].map(function(h) {
+    return String(h || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  });
+
+  // Localizador de coluna por lista de apelidos possíveis
+  function acharColuna(aliases) {
+    for (var i = 0; i < headers.length; i++) {
+      for (var a = 0; a < aliases.length; a++) {
+        if (headers[i].indexOf(aliases[a]) !== -1) return i;
+      }
+    }
+    return -1;
+  }
+
+  var colProc = acharColuna(["numerodoprocesso", "processo", "numprocesso", "cnj"]);
+  var colAutor = acharColuna(["nomedoautor", "autor", "parteautora"]);
+  var colReu = acharColuna(["nomedoreu", "reu", "concessionaria"]);
+  var colTipo = acharColuna(["tipodeacao", "tipoacao", "acao"]);
+  var colVara = acharColuna(["varacomarca", "vara", "juizo", "comarca"]);
+  var colCliente = acharColuna(["numerodocliente", "cliente", "instalacao", "uc"]);
+  var colToi = acharColuna(["numerodotoi", "toi", "numtoi"]);
+  var colDataToi = acharColuna(["datalavraturatoi", "datalavratura"]);
+  var colIrreg = acharColuna(["irregularidadealegada", "irregularidade", "gato"]);
+  var colValRec = acharColuna(["valorrecuperacao", "valorrecuperado", "recuperacaoconsumo"]);
+  var colEnd = acharColuna(["enderecocompleto", "endereco", "local"]);
+  var colObj = acharColuna(["objetivodapericia", "objetivo", "escopo"]);
+  var colResumo = acharColuna(["resumodoprocesso", "resumo", "sintese"]);
+  var colAleg = acharColuna(["alegacoesdoautor", "alegacoesautor"]);
+  var colCont = acharColuna(["contestacoesdoreu", "contestacoesreu"]);
+  var colRedIni = acharColuna(["inicioreducao", "reducaoinicio"]);
+  var colRedFim = acharColuna(["fimreducao", "reducaofim"]);
+  var colConsMedio = acharColuna(["consumomedio", "consumoregular", "mediaregular"]);
+  var colConsRecl = acharColuna(["consumoreclamado", "consumomedioreclamado", "mediareclamada"]);
+  var colHistIni = acharColuna(["historicoconsumoinicio", "datainiciohistorico"]);
+  var colHistFim = acharColuna(["historicoconsumofim", "datafimhistorico"]);
+  var colCsv = acharColuna(["historicoconsumocsv", "historicoconsumo", "csvconsumo", "csv"]);
+  var colQJuizo = acharColuna(["quesitosjuizo", "quesitosdojuizo", "quesitosjuiz"]);
+  var colQAutor = acharColuna(["quesitosautor", "quesitosdoautor", "quesitosautora"]);
+  var colQReu = acharColuna(["quesitosreu", "quesitosdoreu", "quesitosconcessionaria"]);
+  var colStatus = acharColuna(["statusautomacao", "status"]);
+  var colLink = acharColuna(["linklaudopdf", "laudopdf", "linkpdf", "laudo"]);
+
+  var procBuscadoLimpo = (numeroProcessoBuscado || "").toString().replace(/[^0-9]/g, "");
+  var autorBuscadoLimpo = (nomeAutorBuscado || "").toString().toLowerCase().trim();
+
+  for (var r = 1; r < dataRange.length; r++) {
+    var row = dataRange[r];
+    var procRow = colProc >= 0 ? String(row[colProc] || "").replace(/[^0-9]/g, "") : "";
+    var autorRow = colAutor >= 0 ? String(row[colAutor] || "").toLowerCase().trim() : "";
+
+    var bateuProcesso = (procBuscadoLimpo && procRow && (procBuscadoLimpo === procRow || procRow.indexOf(procBuscadoLimpo) !== -1 || procBuscadoLimpo.indexOf(procRow) !== -1));
+    var bateuAutor = (autorBuscadoLimpo && autorRow && (autorBuscadoLimpo.indexOf(autorRow) !== -1 || autorRow.indexOf(autorBuscadoLimpo) !== -1));
+
+    if (bateuProcesso || bateuAutor) {
+      return {
+        linha: r + 1,
+        colunaStatus: colStatus >= 0 ? colStatus + 1 : 26,
+        colunaLink: colLink >= 0 ? colLink + 1 : 27,
+        dados: {
+          tipoAcao: colTipo >= 0 ? String(row[colTipo] || "Consumo") : "Consumo",
+          numeroProcesso: colProc >= 0 ? String(row[colProc] || "") : (numeroProcessoBuscado || ""),
+          nomeAutor: colAutor >= 0 ? String(row[colAutor] || "") : (nomeAutorBuscado || ""),
+          nomeReu: colReu >= 0 ? String(row[colReu] || "") : "",
+          varaJuizo: colVara >= 0 ? String(row[colVara] || "") : "",
+          numeroCliente: colCliente >= 0 ? String(row[colCliente] || "") : "",
+          numeroToi: colToi >= 0 ? String(row[colToi] || "") : "",
+          dataLavraturaToi: colDataToi >= 0 ? String(row[colDataToi] || "") : "",
+          irregularidadeAlegada: colIrreg >= 0 ? String(row[colIrreg] || "") : "",
+          valorRecuperacao: colValRec >= 0 ? String(row[colValRec] || "") : "",
+          enderecoPericia: colEnd >= 0 ? String(row[colEnd] || "") : "",
+          objetivoPericia: colObj >= 0 ? String(row[colObj] || "") : "",
+          resumoProcesso: colResumo >= 0 ? String(row[colResumo] || "") : "",
+          alegacoesAutor: colAleg >= 0 ? String(row[colAleg] || "") : "",
+          contestacoesReu: colCont >= 0 ? String(row[colCont] || "") : "",
+          reducaoMesInicio: colRedIni >= 0 ? String(row[colRedIni] || "").split("/")[0] : "01",
+          reducaoAnoInicio: colRedIni >= 0 ? (String(row[colRedIni] || "").split("/")[1] || "2024") : "2024",
+          reducaoMesFim: colRedFim >= 0 ? String(row[colRedFim] || "").split("/")[0] : "12",
+          reducaoAnoFim: colRedFim >= 0 ? (String(row[colRedFim] || "").split("/")[1] || "2024") : "2024",
+          consumoMedio: colConsMedio >= 0 ? String(row[colConsMedio] || "") : "",
+          consumoMedioReclamado: colConsRecl >= 0 ? String(row[colConsRecl] || "") : "",
+          historicoConsumoInicio: colHistIni >= 0 ? String(row[colHistIni] || "") : "",
+          historicoConsumoFim: colHistFim >= 0 ? String(row[colHistFim] || "") : "",
+          historicoConsumoCsv: colCsv >= 0 ? String(row[colCsv] || "") : "",
+          quesitosJuizo: colQJuizo >= 0 ? String(row[colQJuizo] || "") : "",
+          quesitosAutor: colQAutor >= 0 ? String(row[colQAutor] || "") : "",
+          quesitosReu: colQReu >= 0 ? String(row[colQReu] || "") : ""
+        }
+      };
+    }
+  }
+
+  return null;
+}
+
 function buscarAbaFlexivel(ss, nomeDesejado) {
   var sheets = ss.getSheets();
   var nomeLimpo = nomeDesejado.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -585,7 +676,10 @@ function salvarFotosBase64(photosArray, targetFolder, prefixo) {
   for (var i = 0; i < photosArray.length; i++) {
     try {
       var photo = photosArray[i];
-      var base64Data = photo.base64 ? photo.base64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "") : "";
+      var base64Data = photo.base64 || photo.pdfBase64 || "";
+      if (typeof base64Data === "string") {
+        base64Data = base64Data.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
+      }
       if (!base64Data) continue;
       
       var numSeq = (i + 1) < 10 ? "0" + (i + 1) : "" + (i + 1);
