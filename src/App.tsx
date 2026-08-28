@@ -37,11 +37,19 @@ function App() {
 
   // Monitor network status
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      fetch('https://automacao-latex.vercel.app/health', { mode: 'no-cors' }).catch(() => {});
+    };
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Warm-up inicial silencioso do microserviço para eliminar cold-start
+    if (navigator.onLine) {
+      fetch('https://automacao-latex.vercel.app/health', { mode: 'no-cors' }).catch(() => {});
+    }
 
     return () => {
       window.removeEventListener('online', handleOnline);
