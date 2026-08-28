@@ -244,6 +244,7 @@ function App() {
             webhookUrl={webhookUrl}
             isOnline={isOnline}
             userEmail={user?.email}
+            onEditRecord={handleSelectDraft}
           />
         ) : (
           <SyncQueue 

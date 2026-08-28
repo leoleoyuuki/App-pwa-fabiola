@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../utils/db';
 import { 
+  Send,
+  CheckCircle,
+  FileEdit,
   Search, 
   RefreshCw, 
   FileSpreadsheet, 
@@ -17,10 +20,13 @@ import {
   FileText
 } from 'lucide-react';
 
+import type { DraftData } from '../utils/db';
+
 interface CloudHistoryProps {
   webhookUrl: string;
   isOnline: boolean;
   userEmail?: string;
+  onEditRecord?: (draft: DraftData) => void;
 }
 
 function normalizeCloudRecord(rec: any): any {
@@ -90,7 +96,8 @@ function normalizeCloudRecord(rec: any): any {
 export const CloudHistory: React.FC<CloudHistoryProps> = ({
   webhookUrl,
   isOnline,
-  userEmail
+  userEmail,
+  onEditRecord
 }) => {
   const [records, setRecords] = useState<any[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<any[]>([]);
@@ -106,6 +113,128 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
+  const [isResending, setIsResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Manipulador para Retomar Vistoria (Edição)
+  const handleResumeInspection = (rec: any) => {
+    if (!rec) return;
+    const draft: DraftData = {
+      id: 'draft_resume_' + Date.now(),
+      nomeAutor: rec.NomedoAutor || '',
+      numeroProcesso: rec.NúmerodoProcesso || '',
+      reuConcessionaria: rec['Réu/Concessionária'] || rec.RéuConcessionária || '',
+      tipoAcao: rec.TipodeAção || 'Consumo',
+      dataVistoria: normalizeToYMD(rec.DatadaVistoria) || rec.DatadaVistoria || '',
+      numeroVistoria: rec.NºdaVistoria || '1',
+      periodoVistoria: rec.PeríododaVistoria || 'Manhã 09 - 12 h',
+      representacaoAutor: rec['RepresentaçãoAutorPresente?'] || rec.RepresentaçãoAutorPresente || 'Sim',
+      representacaoReu: rec['RepresentaçãoRéuPresente?'] || rec.RepresentaçãoRéuPresente || 'Sim',
+      observacoesPresenca: rec['Obs.PresençadasPartes'] || '',
+      numeroMedidor: rec.NúmerodoMedidor || '',
+      medidorChip: rec['MedidorcomChip?'] || rec.MedidorcomChip || 'Não',
+      condicoesMedidor: rec.CondiçõesdoMedidor || 'Boa (Lacrado)',
+      corteEnergia: rec.CortedeEnergia || 'Não',
+      observacoesMedidor: '',
+      qtdPessoas: rec.PessoasResidentes || '1',
+      qtdComodos: rec.QuantidadedeCômodos || '1',
+      numLampadas: rec.NºdeLâmpadas || '',
+      numTvs: rec.NºdeTVs || '0',
+      numVentiladores: rec.NºdeVentiladores || '0',
+      numVentiladoresTeto: rec.NºdeVentiladoresdeTeto || '0',
+      numArCondicionados: rec.NºdeArCondicionados || '0',
+      numGeladeiras: rec.NºdeGeladeiras || '0',
+      numChuveiros: rec.NºdeChuveirosElétricos || '0',
+      numMaquinasLavar: rec.NºdeMáquinasdeLavar || '0',
+      numFreezers: rec.NºdeFreezers || '0',
+      checklist: rec.ChecklistTécnico ? rec.ChecklistTécnico.split(',').map((s: string) => s.trim()) : [],
+      observacoesFinais: rec.ObservaçõesFinaisdoPerito || '',
+      photosImovel: [],
+      photosMedidor: [],
+      updatedAt: new Date().toISOString()
+    };
+
+    setSelectedRecord(null);
+    onEditRecord?.(draft);
+  };
+
+  // Manipulador para Reenviar Vistoria para o Apps Script
+  const handleResendInspection = async (rec: any) => {
+    if (!webhookUrl || !webhookUrl.includes('script.google.com')) {
+      setResendStatus({ type: 'error', message: 'URL do Google Script inválida.' });
+      return;
+    }
+
+    setIsResending(true);
+    setResendStatus(null);
+
+    try {
+      const payload = {
+        id: 'resend_' + Date.now(),
+        createdAt: new Date().toISOString(),
+        peritoEmail: userEmail || '',
+        nomeAutor: rec.NomedoAutor || '',
+        numeroProcesso: rec.NúmerodoProcesso || '',
+        reuConcessionaria: rec['Réu/Concessionária'] || rec.RéuConcessionária || '',
+        tipoAcao: rec.TipodeAção || 'Consumo',
+        dataVistoria: normalizeToYMD(rec.DatadaVistoria) || rec.DatadaVistoria || '',
+        numeroVistoria: rec.NºdaVistoria || '1',
+        periodoVistoria: rec.PeríododaVistoria || 'Manhã 09 - 12 h',
+        representacaoAutor: rec['RepresentaçãoAutorPresente?'] || rec.RepresentaçãoAutorPresente || 'Sim',
+        representacaoReu: rec['RepresentaçãoRéuPresente?'] || rec.RepresentaçãoRéuPresente || 'Sim',
+        observacoesPresenca: rec['Obs.PresençadasPartes'] || '',
+        numeroMedidor: rec.NúmerodoMedidor || '',
+        medidorChip: rec['MedidorcomChip?'] || rec.MedidorcomChip || 'Não',
+        condicoesMedidor: rec.CondiçõesdoMedidor || 'Boa (Lacrado)',
+        corteEnergia: rec.CortedeEnergia || 'Não',
+        observacoesMedidor: '',
+        qtdPessoas: rec.PessoasResidentes || '1',
+        qtdComodos: rec.QuantidadedeCômodos || '1',
+        numLampadas: rec.NºdeLâmpadas || '',
+        numTvs: rec.NºdeTVs || '0',
+        numVentiladores: rec.NºdeVentiladores || '0',
+        numVentiladoresTeto: rec.NºdeVentiladoresdeTeto || '0',
+        numArCondicionados: rec.NºdeArCondicionados || '0',
+        numGeladeiras: rec.NºdeGeladeiras || '0',
+        numChuveiros: rec.NºdeChuveirosElétricos || '0',
+        numMaquinasLavar: rec.NºdeMáquinasdeLavar || '0',
+        numFreezers: rec.NºdeFreezers || '0',
+        checklist: rec.ChecklistTécnico ? rec.ChecklistTécnico.split(',').map((s: string) => s.trim()) : [],
+        observacoesFinais: rec.ObservaçõesFinaisdoPerito || '',
+        photosImovel: [],
+        photosMedidor: []
+      };
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('HTTP Status: ' + response.status);
+      }
+
+      const resJson = await response.json();
+      if (resJson.status === 'erro') {
+        throw new Error(resJson.message || 'Erro no Apps Script');
+      }
+
+      setResendStatus({
+        type: 'success',
+        message: 'Vistoria reenviada com sucesso!'
+      });
+      fetchRecords();
+    } catch (err: any) {
+      console.error('Erro ao reenviar:', err);
+      setResendStatus({
+        type: 'error',
+        message: 'Falha no reenvio: ' + (err.message || err)
+      });
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   // Helper: Get today in YYYY-MM-DD format
   const getTodayYMD = () => {
@@ -396,7 +525,7 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
             <div 
               key={index} 
               className="card" 
-              onClick={() => setSelectedRecord(rec)}
+              onClick={() => { setResendStatus(null); setSelectedRecord(rec); }}
               style={{ 
                 padding: '16px 20px', 
                 display: 'flex', 
@@ -572,18 +701,97 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
                 </div>
               )}
 
-              {/* Drive Link Action */}
-              {(selectedRecord['LinkdaPasta(GoogleDrive)'] || selectedRecord.LinkdaPastaGoogleDrive) && (
+              {/* Feedback de Reenvio */}
+              {resendStatus && (
+                <div style={{
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  backgroundColor: resendStatus.type === 'success' ? '#e6f4ea' : '#fce8e6',
+                  color: resendStatus.type === 'success' ? '#137333' : '#c5221f',
+                  marginTop: '8px'
+                }}>
+                  {resendStatus.type === 'success' ? <CheckCircle size={16} /> : <X size={16} />}
+                  <span>{resendStatus.message}</span>
+                </div>
+              )}
+
+              {/* Barra de Ações: Retomar Vistoria e Reenviar */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '12px' }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => handleResumeInspection(selectedRecord)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '12px 10px',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    backgroundColor: 'var(--bg-secondary)',
+                    border: '1px solid var(--accent-gold)',
+                    color: 'var(--accent-gold)',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <FileEdit size={16} />
+                  Retomar Vistoria
+                </button>
+
                 <button
                   type="button"
                   className="btn btn-gold"
+                  disabled={isResending || !isOnline}
+                  onClick={() => handleResendInspection(selectedRecord)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '12px 10px',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    opacity: (isResending || !isOnline) ? 0.7 : 1,
+                    cursor: (isResending || !isOnline) ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isResending ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
+                  {isResending ? 'Reenviando...' : 'Reenviar'}
+                </button>
+              </div>
+
+              {/* Link do Google Drive */}
+              {(selectedRecord['LinkdaPasta(GoogleDrive)'] || selectedRecord.LinkdaPastaGoogleDrive) && (
+                <button
+                  type="button"
+                  className="btn"
                   onClick={() => {
                     const url = selectedRecord['LinkdaPasta(GoogleDrive)'] || selectedRecord.LinkdaPastaGoogleDrive;
                     window.open(url, '_blank');
                   }}
-                  style={{ width: '100%', marginTop: '8px' }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '10px 14px',
+                    fontSize: '0.82rem',
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-secondary)',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    marginTop: '4px'
+                  }}
                 >
-                  <ExternalLink size={16} />
+                  <ExternalLink size={15} />
                   Abrir Pasta no Google Drive
                 </button>
               )}
