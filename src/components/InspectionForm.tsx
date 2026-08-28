@@ -267,14 +267,19 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
       const response = await fetch(`${webhookUrl}?action=processos${peritoQuery}`, { method: 'GET' });
       if (!response.ok) throw new Error(`HTTP: ${response.status}`);
       const data = await response.json();
+      let procList: any[] = [];
       if (Array.isArray(data)) {
-        setScheduledProcesses(data);
-        await db.saveScheduledProcesses(data, userEmail);
-        setSyncSuccess(`Sincronizado: ${data.length} cadastros salvos!`);
-        setTimeout(() => setSyncSuccess(null), 3000);
+        procList = data;
+      } else if (data && typeof data === 'object') {
+        procList = data.processos || data.records || data.data || [];
       } else {
         throw new Error('Resposta do servidor inválida.');
       }
+
+      setScheduledProcesses(procList);
+      await db.saveScheduledProcesses(procList, userEmail);
+      setSyncSuccess(`Sincronizado: ${procList.length} cadastros salvos!`);
+      setTimeout(() => setSyncSuccess(null), 3000);
     } catch (err: any) {
       console.error('Erro ao baixar cadastros:', err);
       setSyncSuccess('Erro ao conectar com a planilha.');

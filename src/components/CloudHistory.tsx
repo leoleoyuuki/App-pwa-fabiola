@@ -165,15 +165,20 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
         throw new Error(data.error);
       }
 
+      let recordsList: any[] = [];
       if (Array.isArray(data)) {
-        // Sort newest first based on Timestamp column (Data de Envio)
-        const sorted = [...data].reverse();
-        setRecords(sorted);
-        setFilteredRecords(sorted);
-        await db.saveCloudRecords(sorted, userEmail); // Cache locally per perito
+        recordsList = data;
+      } else if (data && typeof data === 'object') {
+        recordsList = data.relatorios || data.records || data.processos || data.data || [];
       } else {
         throw new Error('Formato de resposta inesperado do Google Script.');
       }
+
+      // Sort newest first based on Timestamp column (Data de Envio)
+      const sorted = [...recordsList].reverse();
+      setRecords(sorted);
+      setFilteredRecords(sorted);
+      await db.saveCloudRecords(sorted, userEmail); // Cache locally per perito
     } catch (err: any) {
       console.error('Erro ao ler registros da planilha:', err);
       setErrorMsg(`Erro de conexão: ${err.message || err}`);

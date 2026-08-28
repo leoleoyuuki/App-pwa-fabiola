@@ -53,97 +53,125 @@ var ATIVAR_GERACAO_LAUDO_LATEX = true;
  */
 function doGet(e) {
   try {
-    var peritoEmail = (e && e.parameter && e.parameter.peritoEmail) ? e.parameter.peritoEmail.toLowerCase().trim() : PERITO_PADRAO_EMAIL;
+    var params = (e && e.parameter) ? e.parameter : {};
+    var peritoEmail = (params.peritoEmail || params.perito || PERITO_PADRAO_EMAIL).toLowerCase().trim();
     var config = PERITOS_CONFIG[peritoEmail] || PERITOS_CONFIG[PERITO_PADRAO_EMAIL];
     
     var spreadsheetId = config.spreadsheetId;
     var ss = SpreadsheetApp.openById(spreadsheetId);
-    
-    // Busca estritamente a aba de Processos Energia
-    var sheetProcessos = buscarAbaFlexivel(ss, "Processos Energia") || buscarAbaFlexivel(ss, "Processos") || buscarAbaFlexivel(ss, "Pré-Vistoria");
-    
-    var processos = [];
-    if (sheetProcessos) {
-      var dataProcessos = sheetProcessos.getDataRange().getDisplayValues();
-      if (dataProcessos.length > 1) {
-        var headers = dataProcessos[0];
-        
-        var colTipo = acharIndiceColuna(headers, ["tipodeacaoconsumotoi", "tipodeacao", "tipoacao", "acao"]);
-        var colProc = acharIndiceColuna(headers, ["numerodoprocessocnj", "numerodoprocesso", "processo", "numprocesso", "cnj"]);
-        var colAutor = acharIndiceColuna(headers, ["nomedoautor", "autor", "parteautora"]);
-        var colReu = acharIndiceColuna(headers, ["nomedoreu", "reu", "concessionaria", "empresa"]);
-        var colVara = acharIndiceColuna(headers, ["varacomarca", "vara", "juizo", "comarca"]);
-        var colCliente = acharIndiceColuna(headers, ["numerodoclienteinstalacao", "numerodocliente", "cliente", "instalacao", "uc"]);
-        var colToi = acharIndiceColuna(headers, ["numerodotoi", "toi", "numtoi"]);
-        var colDataToi = acharIndiceColuna(headers, ["datalavraturatoi", "datalavratura"]);
-        var colIrreg = acharIndiceColuna(headers, ["irregularidadealegadagatodesvio", "irregularidadealegada", "irregularidade", "gato"]);
-        var colValRec = acharIndiceColuna(headers, ["valorderecuperacaocobrador", "valorrecuperacao", "valorrecuperado"]);
-        var colEnd = acharIndiceColuna(headers, ["enderecocompletodapericia", "enderecocompleto", "endereco", "local"]);
-        var colObj = acharIndiceColuna(headers, ["objetivodapericia", "objetivo", "escopo"]);
-        var colResumo = acharIndiceColuna(headers, ["resumodoprocesso", "resumo", "sintese"]);
-        var colAleg = acharIndiceColuna(headers, ["alegacoesdoautorformatadocom", "alegacoesdoautor", "alegacoesautor"]);
-        var colCont = acharIndiceColuna(headers, ["contestacoesdoreuformatadocom", "contestacoesdoreu", "contestacoesreu"]);
-        var colRedIni = acharIndiceColuna(headers, ["inicioperiodocontrovertidomesano", "inicioreducao", "reducaoinicio"]);
-        var colRedFim = acharIndiceColuna(headers, ["fimperiodocontrovertidomesano", "fimreducao", "reducaofim"]);
-        var colConsMedio = acharIndiceColuna(headers, ["consumomedioregularkwh", "consumomedio", "mediaregular"]);
-        var colConsRecl = acharIndiceColuna(headers, ["consumomedioreclamadokwh", "consumoreclamado", "mediareclamada"]);
-        var colHistIni = acharIndiceColuna(headers, ["datainiciohistoricofaturas", "iniciofaturas", "faturasinicio"]);
-        var colHistFim = acharIndiceColuna(headers, ["datafimhistoricofaturas", "fimfaturas", "faturasfim"]);
-        var colCsv = acharIndiceColuna(headers, ["historicodeconsumocsvmultilinha", "historicodeconsumo", "historicocsv", "csv"]);
-        var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo"]);
-        var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor"]);
-        var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu"]);
-        var colStatus = acharIndiceColuna(headers, ["statusdaautomacao", "status", "situacao"]);
-        
-        for (var i = 1; i < dataProcessos.length; i++) {
-          var row = dataProcessos[i];
-          var numProcVal = colProc >= 0 ? String(row[colProc] || "").trim() : "";
-          var autorVal = colAutor >= 0 ? String(row[colAutor] || "").trim() : "";
+    var action = (params.action || "").toLowerCase().trim();
+
+    // 1. AÇÃO: Processos Pré-Vistoria (Aba "Processos Energia")
+    if (action === "processos" || action === "previstoria" || action === "agenda") {
+      var sheetProcessos = buscarAbaFlexivel(ss, "Processos Energia") || buscarAbaFlexivel(ss, "Processos") || buscarAbaFlexivel(ss, "Pré-Vistoria");
+      
+      var processos = [];
+      if (sheetProcessos) {
+        var dataProcessos = sheetProcessos.getDataRange().getDisplayValues();
+        if (dataProcessos.length > 1) {
+          var headers = dataProcessos[0];
           
-          if (!numProcVal && !autorVal) continue;
+          var colTipo = acharIndiceColuna(headers, ["tipodeacaoconsumotoi", "tipodeacao", "tipoacao", "acao"]);
+          var colProc = acharIndiceColuna(headers, ["numerodoprocessocnj", "numerodoprocesso", "processo", "numprocesso", "cnj"]);
+          var colAutor = acharIndiceColuna(headers, ["nomedoautor", "autor", "parteautora"]);
+          var colReu = acharIndiceColuna(headers, ["nomedoreu", "reu", "concessionaria", "empresa"]);
+          var colVara = acharIndiceColuna(headers, ["varacomarca", "vara", "juizo", "comarca"]);
+          var colCliente = acharIndiceColuna(headers, ["numerodoclienteinstalacao", "numerodocliente", "cliente", "instalacao", "uc"]);
+          var colToi = acharIndiceColuna(headers, ["numerodotoi", "toi", "numtoi"]);
+          var colDataToi = acharIndiceColuna(headers, ["datalavraturatoi", "datalavratura"]);
+          var colIrreg = acharIndiceColuna(headers, ["irregularidadealegadagatodesvio", "irregularidadealegada", "irregularidade", "gato"]);
+          var colValRec = acharIndiceColuna(headers, ["valorderecuperacaocobrador", "valorrecuperacao", "valorrecuperado"]);
+          var colEnd = acharIndiceColuna(headers, ["enderecocompletodapericia", "enderecocompleto", "endereco", "local"]);
+          var colObj = acharIndiceColuna(headers, ["objetivodapericia", "objetivo", "escopo"]);
+          var colResumo = acharIndiceColuna(headers, ["resumodoprocesso", "resumo", "sintese"]);
+          var colAleg = acharIndiceColuna(headers, ["alegacoesdoautorformatadocom", "alegacoesdoautor", "alegacoesautor"]);
+          var colCont = acharIndiceColuna(headers, ["contestacoesdoreuformatadocom", "contestacoesdoreu", "contestacoesreu"]);
+          var colRedIni = acharIndiceColuna(headers, ["inicioperiodocontrovertidomesano", "inicioreducao", "reducaoinicio"]);
+          var colRedFim = acharIndiceColuna(headers, ["fimperiodocontrovertidomesano", "fimreducao", "reducaofim"]);
+          var colConsMedio = acharIndiceColuna(headers, ["consumomedioregularkwh", "consumomedio", "mediaregular"]);
+          var colConsRecl = acharIndiceColuna(headers, ["consumomedioreclamadokwh", "consumoreclamado", "mediareclamada"]);
+          var colHistIni = acharIndiceColuna(headers, ["datainiciohistoricofaturas", "iniciofaturas", "faturasinicio"]);
+          var colHistFim = acharIndiceColuna(headers, ["datafimhistoricofaturas", "fimfaturas", "faturasfim"]);
+          var colCsv = acharIndiceColuna(headers, ["historicodeconsumocsvmultilinha", "historicodeconsumo", "historicocsv", "csv"]);
+          var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo"]);
+          var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor"]);
+          var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu"]);
+          var colStatus = acharIndiceColuna(headers, ["statusdaautomacao", "status", "situacao"]);
           
-          processos.push({
-            linhaIndex: i + 1,
-            tipoAcao: colTipo >= 0 ? String(row[colTipo] || "Consumo") : "Consumo",
-            numeroProcesso: numProcVal,
-            nomeAutor: autorVal,
-            nomeReu: colReu >= 0 ? String(row[colReu] || "") : "",
-            varaJuizo: colVara >= 0 ? String(row[colVara] || "") : "",
-            numeroCliente: colCliente >= 0 ? String(row[colCliente] || "") : "",
-            numeroToi: colToi >= 0 ? String(row[colToi] || "") : "",
-            dataLavraturaToi: colDataToi >= 0 ? String(row[colDataToi] || "") : "",
-            irregularidadeAlegada: colIrreg >= 0 ? String(row[colIrreg] || "") : "",
-            valorRecuperacao: colValRec >= 0 ? String(row[colValRec] || "") : "",
-            enderecoPericia: colEnd >= 0 ? String(row[colEnd] || "") : "",
-            objetivoPericia: colObj >= 0 ? String(row[colObj] || "") : "",
-            resumoProcesso: colResumo >= 0 ? String(row[colResumo] || "") : "",
-            alegacoesAutor: colAleg >= 0 ? String(row[colAleg] || "") : "",
-            contestacoesReu: colCont >= 0 ? String(row[colCont] || "") : "",
-            reducaoMesInicio: colRedIni >= 0 ? String(row[colRedIni] || "").split("/")[0] : "01",
-            reducaoAnoInicio: colRedIni >= 0 ? (String(row[colRedIni] || "").split("/")[1] || "2024") : "2024",
-            reducaoMesFim: colRedFim >= 0 ? String(row[colRedFim] || "").split("/")[0] : "12",
-            reducaoAnoFim: colRedFim >= 0 ? (String(row[colRedFim] || "").split("/")[1] || "2024") : "2024",
-            consumoMedio: colConsMedio >= 0 ? String(row[colConsMedio] || "") : "",
-            consumoMedioReclamado: colConsRecl >= 0 ? String(row[colConsRecl] || "") : "",
-            historicoConsumoInicio: colHistIni >= 0 ? String(row[colHistIni] || "") : "",
-            historicoConsumoFim: colHistFim >= 0 ? String(row[colHistFim] || "") : "",
-            historicoConsumoCsv: colCsv >= 0 ? String(row[colCsv] || "") : "",
-            quesitosJuizo: colQJuizo >= 0 ? String(row[colQJuizo] || "") : "",
-            quesitosAutor: colQAutor >= 0 ? String(row[colQAutor] || "") : "",
-            quesitosReu: colQReu >= 0 ? String(row[colQReu] || "") : "",
-            statusAutomacao: colStatus >= 0 ? String(row[colStatus] || "") : "Pendente"
-          });
+          for (var i = 1; i < dataProcessos.length; i++) {
+            var row = dataProcessos[i];
+            var numProcVal = colProc >= 0 ? String(row[colProc] || "").trim() : "";
+            var autorVal = colAutor >= 0 ? String(row[colAutor] || "").trim() : "";
+            
+            if (!numProcVal && !autorVal) continue;
+            
+            processos.push({
+              linhaIndex: i + 1,
+              tipoAcao: colTipo >= 0 ? String(row[colTipo] || "Consumo") : "Consumo",
+              numeroProcesso: numProcVal,
+              nomeAutor: autorVal,
+              nomeReu: colReu >= 0 ? String(row[colReu] || "") : "",
+              varaJuizo: colVara >= 0 ? String(row[colVara] || "") : "",
+              numeroCliente: colCliente >= 0 ? String(row[colCliente] || "") : "",
+              numeroToi: colToi >= 0 ? String(row[colToi] || "") : "",
+              dataLavraturaToi: colDataToi >= 0 ? String(row[colDataToi] || "") : "",
+              irregularidadeAlegada: colIrreg >= 0 ? String(row[colIrreg] || "") : "",
+              valorRecuperacao: colValRec >= 0 ? String(row[colValRec] || "") : "",
+              enderecoPericia: colEnd >= 0 ? String(row[colEnd] || "") : "",
+              objetivoPericia: colObj >= 0 ? String(row[colObj] || "") : "",
+              resumoProcesso: colResumo >= 0 ? String(row[colResumo] || "") : "",
+              alegacoesAutor: colAleg >= 0 ? String(row[colAleg] || "") : "",
+              contestacoesReu: colCont >= 0 ? String(row[colCont] || "") : "",
+              reducaoMesInicio: colRedIni >= 0 ? String(row[colRedIni] || "").split("/")[0] : "01",
+              reducaoAnoInicio: colRedIni >= 0 ? (String(row[colRedIni] || "").split("/")[1] || "2024") : "2024",
+              reducaoMesFim: colRedFim >= 0 ? String(row[colRedFim] || "").split("/")[0] : "12",
+              reducaoAnoFim: colRedFim >= 0 ? (String(row[colRedFim] || "").split("/")[1] || "2024") : "2024",
+              consumoMedio: colConsMedio >= 0 ? String(row[colConsMedio] || "") : "",
+              consumoMedioReclamado: colConsRecl >= 0 ? String(row[colConsRecl] || "") : "",
+              historicoConsumoInicio: colHistIni >= 0 ? String(row[colHistIni] || "") : "",
+              historicoConsumoFim: colHistFim >= 0 ? String(row[colHistFim] || "") : "",
+              historicoConsumoCsv: colCsv >= 0 ? String(row[colCsv] || "") : "",
+              quesitosJuizo: colQJuizo >= 0 ? String(row[colQJuizo] || "") : "",
+              quesitosAutor: colQAutor >= 0 ? String(row[colQAutor] || "") : "",
+              quesitosReu: colQReu >= 0 ? String(row[colQReu] || "") : "",
+              statusAutomacao: colStatus >= 0 ? String(row[colStatus] || "") : "Pendente"
+            });
+          }
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify(processos)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2. PADRÃO / AÇÃO: Relatórios Enviados (Aba "Energia") para a aba "Relatórios Enviados" (CloudHistory)
+    var sheetEnergia = buscarAbaFlexivel(ss, "Energia") || ss.getSheets()[0];
+    var relatorios = [];
+    if (sheetEnergia) {
+      var dataEnergia = sheetEnergia.getDataRange().getDisplayValues();
+      if (dataEnergia.length > 1) {
+        var headersE = dataEnergia[0];
+        // Normaliza chaves dos cabeçalhos: "Data da Vistoria" -> "DatadaVistoria"
+        var chaves = headersE.map(function(h) {
+          return String(h || "").replace(/\s+/g, "").replace(/[^a-zA-Z0-9]/g, "");
+        });
+
+        for (var r = 1; r < dataEnergia.length; r++) {
+          var linha = dataEnergia[r];
+          var item = {};
+          var temDado = false;
+          for (var c = 0; c < headersE.length; c++) {
+            var chave = chaves[c] || ("coluna" + c);
+            var val = linha[c] || "";
+            if (val) temDado = true;
+            item[chave] = val;
+          }
+          if (temDado) {
+            relatorios.push(item);
+          }
         }
       }
     }
-    
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "sucesso",
-      perito: config.nome,
-      email: peritoEmail,
-      totalProcessos: processos.length,
-      processos: processos
-    })).setMimeType(ContentService.MimeType.JSON);
+
+    return ContentService.createTextOutput(JSON.stringify(relatorios)).setMimeType(ContentService.MimeType.JSON);
     
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({
