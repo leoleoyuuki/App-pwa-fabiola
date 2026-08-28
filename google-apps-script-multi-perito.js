@@ -149,20 +149,33 @@ function doGet(e) {
       var dataEnergia = sheetEnergia.getDataRange().getDisplayValues();
       if (dataEnergia.length > 1) {
         var headersE = dataEnergia[0];
-        // Normaliza chaves dos cabeçalhos: "Data da Vistoria" -> "DatadaVistoria"
-        var chaves = headersE.map(function(h) {
-          return String(h || "").replace(/\s+/g, "").replace(/[^a-zA-Z0-9]/g, "");
-        });
 
         for (var r = 1; r < dataEnergia.length; r++) {
           var linha = dataEnergia[r];
           var item = {};
           var temDado = false;
           for (var c = 0; c < headersE.length; c++) {
-            var chave = chaves[c] || ("coluna" + c);
+            var headerOriginal = String(headersE[c] || "").trim();
+            if (!headerOriginal) continue;
             var val = linha[c] || "";
             if (val) temDado = true;
-            item[chave] = val;
+
+            // 1. Chave exata do cabeçalho original da planilha
+            item[headerOriginal] = val;
+
+            // 2. Chave sem espaços preservando acentos: "Número do Processo" -> "NúmerodoProcesso"
+            var chaveSemEspacos = headerOriginal.replace(/\s+/g, "");
+            item[chaveSemEspacos] = val;
+
+            // 3. Chave sem barras/pontos/interrogação: "Réu / Concessionária" -> "RéuConcessionária"
+            var chaveLimpa = chaveSemEspacos.replace(/[\/\.\?]/g, "");
+            item[chaveLimpa] = val;
+
+            // 4. Chave normalizada em minúsculas sem acentos: "numerodoprocesso"
+            var chaveNorm = headerOriginal.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+            if (chaveNorm) {
+              item[chaveNorm] = val;
+            }
           }
           if (temDado) {
             relatorios.push(item);

@@ -23,6 +23,70 @@ interface CloudHistoryProps {
   userEmail?: string;
 }
 
+function normalizeCloudRecord(rec: any): any {
+  if (!rec || typeof rec !== 'object') return rec;
+  
+  const get = (...keys: string[]): string => {
+    for (const k of keys) {
+      if (rec[k] !== undefined && rec[k] !== null && String(rec[k]).trim() !== '') {
+        return String(rec[k]);
+      }
+    }
+    const cleanKeys: Record<string, any> = {};
+    for (const ok of Object.keys(rec)) {
+      const norm = ok.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+      if (norm && rec[ok] !== undefined && rec[ok] !== null) {
+        cleanKeys[norm] = rec[ok];
+      }
+    }
+    for (const k of keys) {
+      const normK = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+      if (cleanKeys[normK] !== undefined && cleanKeys[normK] !== null && String(cleanKeys[normK]).trim() !== '') {
+        return String(cleanKeys[normK]);
+      }
+    }
+    return '';
+  };
+
+  return {
+    ...rec,
+    DatadeEnvio: get('DatadeEnvio', 'Data de Envio', 'datadeenvio', 'timestamp', 'dataenvio'),
+    NomedoAutor: get('NomedoAutor', 'Nome do Autor', 'nomedoautor', 'autor'),
+    NúmerodoProcesso: get('NúmerodoProcesso', 'Número do Processo', 'numerodoprocesso', 'processo', 'numprocesso', 'nmerodoprocesso'),
+    'Réu/Concessionária': get('Réu/Concessionária', 'Réu / Concessionária', 'RéuConcessionária', 'reuconcessionaria', 'nomedoreu', 'reu', 'ruconcessionria'),
+    RéuConcessionária: get('RéuConcessionária', 'Réu / Concessionária', 'reuconcessionaria', 'nomedoreu', 'reu', 'ruconcessionria'),
+    TipodeAção: get('TipodeAção', 'Tipo de Ação', 'tipodeacao', 'tipoacao', 'acao', 'tipodeao'),
+    DatadaVistoria: get('DatadaVistoria', 'Data da Vistoria', 'datadavistoria', 'datavistoria'),
+    NºdaVistoria: get('NºdaVistoria', 'Nº da Vistoria', 'NdaVistoria', 'ndavistoria', 'numerovistoria'),
+    PeríododaVistoria: get('PeríododaVistoria', 'Período da Vistoria', 'PerododaVistoria', 'periododavistoria', 'periodo'),
+    'RepresentaçãoAutorPresente?': get('RepresentaçãoAutorPresente?', 'Representação Autor Presente?', 'RepresentaçãoAutorPresente', 'representacaoautorpresente', 'repautor', 'representaoautorpresente'),
+    RepresentaçãoAutorPresente: get('RepresentaçãoAutorPresente', 'Representação Autor Presente?', 'representacaoautorpresente', 'representaoautorpresente'),
+    'RepresentaçãoRéuPresente?': get('RepresentaçãoRéuPresente?', 'Representação Réu Presente?', 'RepresentaçãoRéuPresente', 'representacaoreupresente', 'repreu', 'representaorupresente'),
+    RepresentaçãoRéuPresente: get('RepresentaçãoRéuPresente', 'Representação Réu Presente?', 'representacaoreupresente', 'representaorupresente'),
+    'Obs.PresençadasPartes': get('Obs.PresençadasPartes', 'Obs. Presença das Partes', 'ObsPresençadasPartes', 'obspresencadaspartes', 'obspresenca', 'obspresenadaspartes'),
+    NúmerodoMedidor: get('NúmerodoMedidor', 'Número do Medidor', 'numerodomedidor', 'medidor', 'nummedidor', 'nmerodomedidor'),
+    'MedidorcomChip?': get('MedidorcomChip?', 'Medidor com Chip?', 'MedidorcomChip', 'medidorcomchip'),
+    MedidorcomChip: get('MedidorcomChip', 'Medidor com Chip?', 'medidorcomchip'),
+    CondiçõesdoMedidor: get('CondiçõesdoMedidor', 'Condições do Medidor', 'condicoesdomedidor', 'condicoesmedidor', 'condiesdomedidor'),
+    CortedeEnergia: get('CortedeEnergia', 'Corte de Energia?', 'CortedeEnergia?', 'cortedeenergia'),
+    PessoasResidentes: get('PessoasResidentes', 'Pessoas Residentes', 'pessoasresidentes', 'qtdPessoas'),
+    QuantidadedeCômodos: get('QuantidadedeCômodos', 'Quantidade de Cômodos', 'quantidadedecomodos', 'qtdComodos', 'comodos', 'quantidadedecmodos'),
+    NºdeLâmpadas: get('NºdeLâmpadas', 'Nº de Lâmpadas', 'NdeLampadas', 'ndelampadas', 'lampadas', 'numLampadas', 'ndelpadas'),
+    NºdeTVs: get('NºdeTVs', 'Nº de TVs', 'NdeTVs', 'ndetvs', 'tvs', 'numTvs'),
+    NºdeVentiladores: get('NºdeVentiladores', 'Nº de Ventiladores', 'NdeVentiladores', 'ndeventiladores', 'ventiladores', 'numVentiladores'),
+    NºdeVentiladoresdeTeto: get('NºdeVentiladoresdeTeto', 'Nº de Ventiladores de Teto', 'NdeVentiladoresdeTeto', 'ndeventiladoresdeteto', 'numVentiladoresTeto'),
+    NºdeArCondicionados: get('NºdeArCondicionados', 'Nº de Ar Condicionados', 'NdeArCondicionados', 'ndearcondicionados', 'numArCondicionados'),
+    NºdeGeladeiras: get('NºdeGeladeiras', 'Nº de Geladeiras', 'NdeGeladeiras', 'ndegeladeiras', 'numGeladeiras'),
+    NºdeChuveirosElétricos: get('NºdeChuveirosElétricos', 'Nº de Chuveiros Elétricos', 'NdeChuveirosEletricos', 'ndechuveiroseletricos', 'numChuveiros', 'ndechuveiroseltricos'),
+    NºdeMáquinasdeLavar: get('NºdeMáquinasdeLavar', 'Nº de Máquinas de Lavar', 'NdeMaquinasdeLavar', 'ndemaquinasdelavar', 'numMaquinasLavar', 'ndemquinasdelavar'),
+    NºdeFreezers: get('NºdeFreezers', 'Nº de Freezers', 'NdeFreezers', 'ndefreezers', 'numFreezers'),
+    ChecklistTécnico: get('ChecklistTécnico', 'Checklist Técnico', 'checklisttecnico', 'checklist', 'checklisttcnico'),
+    ObservaçõesFinaisdoPerito: get('ObservaçõesFinaisdoPerito', 'Observações Finais do Perito', 'observacoesfinaisdoperito', 'observacoesfinais', 'observaesfinaisdoperito'),
+    'LinkdaPasta(GoogleDrive)': get('LinkdaPasta(GoogleDrive)', 'Link da Pasta (Google Drive)', 'LinkdaPastaGoogleDrive', 'linkdapastagoogledrive', 'linkpasta', 'folderUrl'),
+    LinkdaPastaGoogleDrive: get('LinkdaPastaGoogleDrive', 'Link da Pasta (Google Drive)', 'linkdapastagoogledrive', 'folderUrl')
+  };
+}
+
 export const CloudHistory: React.FC<CloudHistoryProps> = ({
   webhookUrl,
   isOnline,
@@ -87,8 +151,9 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
       try {
         const cached = await db.getCloudRecords(userEmail);
         if (cached) {
-          setRecords(cached);
-          setFilteredRecords(cached);
+          const normalized = cached.map(normalizeCloudRecord);
+          setRecords(normalized);
+          setFilteredRecords(normalized);
         }
       } catch (err) {
         console.error('Erro ao ler cache de registros:', err);
@@ -174,8 +239,8 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
         throw new Error('Formato de resposta inesperado do Google Script.');
       }
 
-      // Sort newest first based on Timestamp column (Data de Envio)
-      const sorted = [...recordsList].reverse();
+      const normalized = recordsList.map(normalizeCloudRecord);
+      const sorted = [...normalized].reverse();
       setRecords(sorted);
       setFilteredRecords(sorted);
       await db.saveCloudRecords(sorted, userEmail); // Cache locally per perito
@@ -186,8 +251,9 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
       // Load cache if fetch fails
       const cached = await db.getCloudRecords(userEmail);
       if (cached) {
-        setRecords(cached);
-        setFilteredRecords(cached);
+        const normalized = cached.map(normalizeCloudRecord);
+        setRecords(normalized);
+        setFilteredRecords(normalized);
       }
     } finally {
       setIsLoading(false);
