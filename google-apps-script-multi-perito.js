@@ -372,7 +372,7 @@ function doPost(e) {
           photosMedidor: data.photosMedidor || []
         };
 
-        // --- ETAPA 1: IA Gemini redige as respostas dos quesitos (~10 a 15s) ---
+        // --- ETAPA 1: IA Gemini redige as respostas e prepara arquivos .TeX / .CSV (~6 a 12s) ---
         var respostasQuesitos = {
           quesitosDoJuizo: "\\textbf{Quesitos do Juízo:} Aguardando manifestação técnica.",
           quesitosDoAutor: "\\textbf{Quesitos do Autor:} Aguardando manifestação técnica.",
@@ -391,14 +391,29 @@ function doPost(e) {
             muteHttpExceptions: true
           });
           var jsonQuesitos = JSON.parse(respQuesitosHttp.getContentText());
-          if (jsonQuesitos && jsonQuesitos.respostas) {
-            respostasQuesitos = jsonQuesitos.respostas;
+          if (jsonQuesitos) {
+            if (jsonQuesitos.respostas) {
+              respostasQuesitos = jsonQuesitos.respostas;
+            }
+            // 🛡️ FALLBACK GARANTIDO: Salva os arquivos LaTeX (.tex) e CSV (.csv) imediatamente no Drive
+            if (jsonQuesitos.dadosTex) {
+              var blobDadosTex = Utilities.newBlob(jsonQuesitos.dadosTex, "text/plain; charset=utf-8", "dados.tex");
+              inspectionFolder.createFile(blobDadosTex);
+            }
+            if (jsonQuesitos.modeloAutoTex) {
+              var blobModeloTex = Utilities.newBlob(jsonQuesitos.modeloAutoTex, "text/plain; charset=utf-8", "modelo_auto.tex");
+              inspectionFolder.createFile(blobModeloTex);
+            }
+            if (jsonQuesitos.historicoCsv) {
+              var blobCsv = Utilities.newBlob(jsonQuesitos.historicoCsv, "text/csv; charset=utf-8", "historico_consumo.csv");
+              inspectionFolder.createFile(blobCsv);
+            }
           }
         } catch (errQ) {
           console.warn("Aviso ao responder quesitos com Gemini (usando fallback):", errQ.toString());
         }
 
-        // --- ETAPA 2: Compilação do PDF Oficial com Tectonic XeTeX (~12 a 15s) ---
+        // --- ETAPA 2: Compilação do PDF Oficial com Tectonic XeTeX (~12 a 25s) ---
         var payloadCompilacao = Object.assign({}, dadosProcesso, dadosVistoria, {
           quesitosDoJuizo: respostasQuesitos.quesitosDoJuizo || respostasQuesitos.quesitos_juizo,
           quesitosDoAutor: respostasQuesitos.quesitosDoAutor || respostasQuesitos.quesitos_autor,
@@ -415,7 +430,7 @@ function doPost(e) {
         var jsonResp = JSON.parse(respCompilacaoHttp.getContentText());
 
         if (jsonResp && jsonResp.status === "sucesso") {
-          // 1. Salva Laudo PDF no Google Drive
+          // Salva Laudo PDF no Google Drive
           if (jsonResp.pdfBase64) {
             var blobPdf = Utilities.newBlob(
               Utilities.base64Decode(jsonResp.pdfBase64),
@@ -426,22 +441,15 @@ function doPost(e) {
             urlLaudoGerado = arquivoPdf.getUrl();
           }
 
-          // 2. Salva dados.tex no Drive
-          if (jsonResp.dadosTex) {
-            var blobDadosTex = Utilities.newBlob(jsonResp.dadosTex, "text/plain; charset=utf-8", "dados.tex");
-            inspectionFolder.createFile(blobDadosTex);
+          // Atualiza dados.tex / modelo_auto / csv caso não tenham sido gravados na Etapa 1
+          if (jsonResp.dadosTex && !inspectionFolder.getFilesByName("dados.tex").hasNext()) {
+            inspectionFolder.createFile(Utilities.newBlob(jsonResp.dadosTex, "text/plain; charset=utf-8", "dados.tex"));
           }
-
-          // 3. Salva historico_consumo.csv no Drive
-          if (jsonResp.historicoCsv) {
-            var blobCsv = Utilities.newBlob(jsonResp.historicoCsv, "text/csv; charset=utf-8", "historico_consumo.csv");
-            inspectionFolder.createFile(blobCsv);
+          if (jsonResp.historicoCsv && !inspectionFolder.getFilesByName("historico_consumo.csv").hasNext()) {
+            inspectionFolder.createFile(Utilities.newBlob(jsonResp.historicoCsv, "text/csv; charset=utf-8", "historico_consumo.csv"));
           }
-
-          // 4. Salva modelo_auto.tex no Drive
-          if (jsonResp.modeloAutoTex) {
-            var blobModeloTex = Utilities.newBlob(jsonResp.modeloAutoTex, "text/plain; charset=utf-8", "modelo_auto.tex");
-            inspectionFolder.createFile(blobModeloTex);
+          if (jsonResp.modeloAutoTex && !inspectionFolder.getFilesByName("modelo_auto.tex").hasNext()) {
+            inspectionFolder.createFile(Utilities.newBlob(jsonResp.modeloAutoTex, "text/plain; charset=utf-8", "modelo_auto.tex"));
           }
 
           // 5. Atualiza o Link do Laudo PDF na aba Energia
