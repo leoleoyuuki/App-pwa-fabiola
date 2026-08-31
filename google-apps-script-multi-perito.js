@@ -43,7 +43,7 @@ var PERITOS_CONFIG = {
 };
 
 var PERITO_PADRAO_EMAIL = "rodrigues.periciajud@gmail.com";
-var MICROSERVICE_LATEX_URL = "https://automacao-latex.vercel.app/api/gerar-laudo-completo";
+var MICROSERVICE_LATEX_BASE_URL = "https://automacao-latex.vercel.app";
 var ATIVAR_GERACAO_LAUDO_LATEX = true;
 
 /**
@@ -326,64 +326,93 @@ function doPost(e) {
       }
     }
 
-    // 5. Automação do Laudo LaTeX Oficial via Microserviço Vercel
+    // 5. Automação do Laudo LaTeX Oficial via Microserviço Vercel (Pipeline em 2 Etapas sem Timeout)
     if (ATIVAR_GERACAO_LAUDO_LATEX) {
       try {
-        var payloadEnvio = {
-          processo: Object.assign({
-            peritoNome: config.nome,
-            peritoTituloLinhaA: config.tituloLinhaA,
-            peritoTituloLinhaB: config.tituloLinhaB,
-            peritoRegistroRotulo: config.registroRotulo,
-            peritoRegistroNumero: config.registroNumero,
-            peritoTelefone: config.telefone,
-            peritoEmail: config.email,
-            nomeAutor: nomeAutor,
-            numeroProcesso: data.numeroProcesso || "",
-            reuConcessionaria: data.reuConcessionaria || "",
-            tipoAcao: data.tipoAcao || "Consumo"
-          }, dadosPreVistoria || {}),
-          
-          vistoria: {
-            dataVistoria: data.dataVistoria || "",
-            numeroVistoria: data.numeroVistoria || "1",
-            periodoVistoria: data.periodoVistoria || "",
-            qtdPessoas: data.qtdPessoas || "1",
-            qtdComodos: data.qtdComodos || "1",
-            numLampadas: data.numLampadas || "0",
-            numTvs: data.numTvs || "0",
-            numVentiladores: data.numVentiladores || "0",
-            numVentiladoresTeto: data.numVentiladoresTeto || "0",
-            numArCondicionados: data.numArCondicionados || "0",
-            numGeladeiras: data.numGeladeiras || "0",
-            numChuveiros: data.numChuveiros || "0",
-            numMaquinasLavar: data.numMaquinasLavar || "0",
-            numFreezers: data.numFreezers || "0",
-            checklist: data.checklist || [],
-            numeroMedidor: data.numeroMedidor || "",
-            medidorChip: data.medidorChip || "Não",
-            condicoesMedidor: data.condicoesMedidor || "Boa (Lacrado)",
-            corteEnergia: data.corteEnergia || "Não",
-            observacoesMedidor: data.observacoesMedidor || "",
-            representacaoAutor: data.representacaoAutor || "Presente",
-            representacaoReu: data.representacaoReu || "Ausente",
-            observacoesPresenca: data.observacoesPresenca || "",
-            observacoesFinais: data.observacoesFinais || "",
-            photosImovel: data.photosImovel || [],
-            photosMedidor: data.photosMedidor || []
-          },
-          returnBase64: true
+        var dadosProcesso = Object.assign({
+          peritoNome: config.nome,
+          peritoTituloLinhaA: config.tituloLinhaA,
+          peritoTituloLinhaB: config.tituloLinhaB,
+          peritoRegistroRotulo: config.registroRotulo,
+          peritoRegistroNumero: config.registroNumero,
+          peritoTelefone: config.telefone,
+          peritoEmail: config.email,
+          nomeAutor: nomeAutor,
+          numeroProcesso: data.numeroProcesso || "",
+          reuConcessionaria: data.reuConcessionaria || "",
+          tipoAcao: data.tipoAcao || "Consumo"
+        }, dadosPreVistoria || {});
+
+        var dadosVistoria = {
+          dataVistoria: data.dataVistoria || "",
+          numeroVistoria: data.numeroVistoria || "1",
+          periodoVistoria: data.periodoVistoria || "",
+          qtdPessoas: data.qtdPessoas || "1",
+          qtdComodos: data.qtdComodos || "1",
+          numLampadas: data.numLampadas || "0",
+          numTvs: data.numTvs || "0",
+          numVentiladores: data.numVentiladores || "0",
+          numVentiladoresTeto: data.numVentiladoresTeto || "0",
+          numArCondicionados: data.numArCondicionados || "0",
+          numGeladeiras: data.numGeladeiras || "0",
+          numChuveiros: data.numChuveiros || "0",
+          numMaquinasLavar: data.numMaquinasLavar || "0",
+          numFreezers: data.numFreezers || "0",
+          checklist: data.checklist || [],
+          numeroMedidor: data.numeroMedidor || "",
+          medidorChip: data.medidorChip || "Não",
+          condicoesMedidor: data.condicoesMedidor || "Boa (Lacrado)",
+          corteEnergia: data.corteEnergia || "Não",
+          observacoesMedidor: data.observacoesMedidor || "",
+          representacaoAutor: data.representacaoAutor || "Presente",
+          representacaoReu: data.representacaoReu || "Ausente",
+          observacoesPresenca: data.observacoesPresenca || "",
+          observacoesFinais: data.observacoesFinais || "",
+          photosImovel: data.photosImovel || [],
+          photosMedidor: data.photosMedidor || []
         };
 
-        var optionsVercel = {
+        // --- ETAPA 1: IA Gemini redige as respostas dos quesitos (~10 a 15s) ---
+        var respostasQuesitos = {
+          quesitosDoJuizo: "\\textbf{Quesitos do Juízo:} Aguardando manifestação técnica.",
+          quesitosDoAutor: "\\textbf{Quesitos do Autor:} Aguardando manifestação técnica.",
+          quesitosDoReu: "\\textbf{Quesitos do Réu:} Aguardando manifestação técnica."
+        };
+
+        try {
+          var payloadQuesitos = {
+            processo: dadosProcesso,
+            vistoria: dadosVistoria
+          };
+          var respQuesitosHttp = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
+            method: "post",
+            contentType: "application/json",
+            payload: JSON.stringify(payloadQuesitos),
+            muteHttpExceptions: true
+          });
+          var jsonQuesitos = JSON.parse(respQuesitosHttp.getContentText());
+          if (jsonQuesitos && jsonQuesitos.respostas) {
+            respostasQuesitos = jsonQuesitos.respostas;
+          }
+        } catch (errQ) {
+          console.warn("Aviso ao responder quesitos com Gemini (usando fallback):", errQ.toString());
+        }
+
+        // --- ETAPA 2: Compilação do PDF Oficial com Tectonic XeTeX (~12 a 15s) ---
+        var payloadCompilacao = Object.assign({}, dadosProcesso, dadosVistoria, {
+          quesitosDoJuizo: respostasQuesitos.quesitosDoJuizo || respostasQuesitos.quesitos_juizo,
+          quesitosDoAutor: respostasQuesitos.quesitosDoAutor || respostasQuesitos.quesitos_autor,
+          quesitosDoReu: respostasQuesitos.quesitosDoReu || respostasQuesitos.quesitos_reu,
+          returnBase64: true
+        });
+
+        var respCompilacaoHttp = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/compilar-laudo", {
           method: "post",
           contentType: "application/json",
-          payload: JSON.stringify(payloadEnvio),
+          payload: JSON.stringify(payloadCompilacao),
           muteHttpExceptions: true
-        };
-
-        var respHttp = UrlFetchApp.fetch(MICROSERVICE_LATEX_URL, optionsVercel);
-        var jsonResp = JSON.parse(respHttp.getContentText());
+        });
+        var jsonResp = JSON.parse(respCompilacaoHttp.getContentText());
 
         if (jsonResp && jsonResp.status === "sucesso") {
           // 1. Salva Laudo PDF no Google Drive
@@ -435,7 +464,7 @@ function doPost(e) {
           }
         }
       } catch (errLaudo) {
-        console.warn("Aviso ao gerar laudo automático:", errLaudo.toString());
+        console.warn("Aviso ao gerar laudo automático em 2 etapas:", errLaudo.toString());
       }
     }
     
