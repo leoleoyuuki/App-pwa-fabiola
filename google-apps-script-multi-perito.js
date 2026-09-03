@@ -382,6 +382,11 @@ function doPost(e) {
         };
 
         try {
+          // Warm-up prévio do microserviço para eliminar cold-start de bundles
+          try {
+            UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/health", { muteHttpExceptions: true });
+          } catch (eWarm) {}
+
           var payloadQuesitos = {
             processo: dadosProcesso,
             vistoria: dadosVistoria
