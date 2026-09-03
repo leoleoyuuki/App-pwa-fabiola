@@ -266,13 +266,20 @@ function doPost(e) {
     
     // 2. Salva Fotografias em Base64
     var urlsFotosImovel = [];
-    if (data.photosImovel && Array.isArray(data.photosImovel)) {
+    if (data.photosImovel && Array.isArray(data.photosImovel) && data.photosImovel.length > 0) {
       urlsFotosImovel = salvarFotosBase64(data.photosImovel, subfolderImovel, "Imovel_");
     }
     
     var urlsFotosMedidor = [];
-    if (data.photosMedidor && Array.isArray(data.photosMedidor)) {
+    if (data.photosMedidor && Array.isArray(data.photosMedidor) && data.photosMedidor.length > 0) {
       urlsFotosMedidor = salvarFotosBase64(data.photosMedidor, subfolderMedidor, "Medidor_");
+    }
+
+    // Se for um reenvio sem fotos no payload, mas com o link da pasta anterior do Drive:
+    // Copia as fotos da pasta original do Drive e prepara o base64 para o Laudo LaTeX
+    var pastaOrigemUrl = data.pastaOrigemUrl || data.linkDaPastaOrigem || "";
+    if ((urlsFotosImovel.length === 0 && urlsFotosMedidor.length === 0) && pastaOrigemUrl) {
+      copiarFotosDaPastaOrigem(pastaOrigemUrl, subfolderImovel, subfolderMedidor, data);
     }
     
     // 3. Gravação na Planilha de Vistorias na aba "Energia" (Relatórios)
@@ -805,6 +812,80 @@ function salvarFotosBase64(photosArray, targetFolder, prefixo) {
     }
   }
   return urls;
+}
+
+function extrairFolderId(url) {
+  if (!url) return null;
+  var str = String(url);
+  var match = str.match(/folders\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  var matchId = str.match(/id=([a-zA-Z0-9_-]+)/);
+  if (matchId) return matchId[1];
+  return null;
+}
+
+function copiarFotosDaPastaOrigem(pastaOrigemUrl, targetSubfolderImovel, targetSubfolderMedidor, dataObj) {
+  try {
+    var folderId = extrairFolderId(pastaOrigemUrl);
+    if (!folderId) return;
+    
+    var pastaOrigem = DriveApp.getFolderById(folderId);
+    if (!pastaOrigem) return;
+
+    if (!dataObj.photosImovel) dataObj.photosImovel = [];
+    if (!dataObj.photosMedidor) dataObj.photosMedidor = [];
+
+    // 1. Copia fotos da Residência da pasta original para a nova versão
+    var subPastasResidencia = pastaOrigem.getFoldersByName("Fotos da Residência");
+    if (subPastasResidencia.hasNext()) {
+      var origSubRes = subPastasResidencia.next();
+      var files = origSubRes.getFiles();
+      while (files.hasNext()) {
+        var file = files.next();
+        var mime = file.getMimeType();
+        if (mime.indexOf("image") !== -1 || mime.indexOf("jpeg") !== -1 || mime.indexOf("png") !== -1 || mime.indexOf("octet-stream") !== -1) {
+          file.makeCopy(file.getName(), targetSubfolderImovel);
+          try {
+            var b64 = Utilities.base64Encode(file.getBlob().getBytes());
+            dataObj.photosImovel.push({
+              name: file.getName(),
+              base64: b64,
+              pdfBase64: b64
+            });
+          } catch (eB64) {
+            console.warn("Aviso ao codificar foto imovel base64:", eB64.toString());
+          }
+        }
+      }
+    }
+
+    // 2. Copia fotos do Medidor da pasta original para a nova versão
+    var subPastasMedidor = pastaOrigem.getFoldersByName("Fotos do Medidor");
+    if (subPastasMedidor.hasNext()) {
+      var origSubMed = subPastasMedidor.next();
+      var filesM = origSubMed.getFiles();
+      while (filesM.hasNext()) {
+        var fileM = filesM.next();
+        var mimeM = fileM.getMimeType();
+        if (mimeM.indexOf("image") !== -1 || mimeM.indexOf("jpeg") !== -1 || mimeM.indexOf("png") !== -1 || mimeM.indexOf("octet-stream") !== -1) {
+          fileM.makeCopy(fileM.getName(), targetSubfolderMedidor);
+          try {
+            var b64M = Utilities.base64Encode(fileM.getBlob().getBytes());
+            dataObj.photosMedidor.push({
+              name: fileM.getName(),
+              base64: b64M,
+              pdfBase64: b64M
+            });
+          } catch (eB64M) {
+            console.warn("Aviso ao codificar foto medidor base64:", eB64M.toString());
+          }
+        }
+      }
+    }
+    console.log("Fotos replicadas com sucesso da pasta de origem: " + dataObj.photosImovel.length + " do imóvel e " + dataObj.photosMedidor.length + " do medidor.");
+  } catch (err) {
+    console.warn("Erro ao copiar fotos da pasta de origem:", err.toString());
+  }
 }
 
 function isRegistroDuplicado(sheet, numeroProcesso, nomeAutor, dataVistoria) {

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 
 import type { DraftData } from '../utils/db';
+import { compressImageForDrive, resizeImageForPdf } from '../utils/syncService';
 
 interface CloudHistoryProps {
   webhookUrl: string;
@@ -169,10 +170,58 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
     setResendStatus(null);
 
     try {
+      // 1. Obtém o link da pasta de origem no Google Drive
+      const pastaOrigemUrl = rec['LinkdaPasta(GoogleDrive)'] || rec.LinkdaPastaGoogleDrive || rec.folderUrl || '';
+
+      // 2. Tenta recuperar fotografias locais salvas no IndexedDB deste aparelho
+      const photosImovelPayload: any[] = [];
+      const photosMedidorPayload: any[] = [];
+      let fotosLocaisEncontradas = 0;
+
+      try {
+        const drafts = await db.getAllDrafts(userEmail);
+        const procLimpo = (rec.NúmerodoProcesso || '').replace(/\D/g, '');
+        const autorLimpo = (rec.NomedoAutor || '').trim().toLowerCase();
+
+        const match = drafts.find(d => {
+          const dProc = (d.numeroProcesso || '').replace(/\D/g, '');
+          const dAutor = (d.nomeAutor || '').trim().toLowerCase();
+          return (procLimpo && dProc && procLimpo === dProc) || (autorLimpo && dAutor && autorLimpo === dAutor);
+        });
+
+        if (match) {
+          if (match.photosImovel && match.photosImovel.length > 0) {
+            for (const p of match.photosImovel) {
+              if (p.original) {
+                const b64 = await compressImageForDrive(p.original);
+                const pdfB64 = await resizeImageForPdf(p.original);
+                photosImovelPayload.push({ name: p.name, type: p.type, base64: b64, pdfBase64: pdfB64 });
+                fotosLocaisEncontradas++;
+              }
+            }
+          }
+          if (match.photosMedidor && match.photosMedidor.length > 0) {
+            for (const p of match.photosMedidor) {
+              if (p.original) {
+                const b64 = await compressImageForDrive(p.original);
+                const pdfB64 = await resizeImageForPdf(p.original);
+                photosMedidorPayload.push({ name: p.name, type: p.type, base64: b64, pdfBase64: pdfB64 });
+                fotosLocaisEncontradas++;
+              }
+            }
+          }
+        }
+      } catch (eLocal) {
+        console.warn('Verificação de fotos locais no IndexedDB ignorada:', eLocal);
+      }
+
       const payload = {
         id: 'resend_' + Date.now(),
         createdAt: new Date().toISOString(),
         peritoEmail: userEmail || '',
+        pastaOrigemUrl: pastaOrigemUrl,
+        photosImovel: photosImovelPayload,
+        photosMedidor: photosMedidorPayload,
         nomeAutor: rec.NomedoAutor || '',
         numeroProcesso: rec.NúmerodoProcesso || '',
         reuConcessionaria: rec['Réu/Concessionária'] || rec.RéuConcessionária || '',
@@ -200,9 +249,7 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
         numMaquinasLavar: rec.NºdeMáquinasdeLavar || '0',
         numFreezers: rec.NºdeFreezers || '0',
         checklist: rec.ChecklistTécnico ? rec.ChecklistTécnico.split(',').map((s: string) => s.trim()) : [],
-        observacoesFinais: rec.ObservaçõesFinaisdoPerito || '',
-        photosImovel: [],
-        photosMedidor: []
+        observacoesFinais: rec.ObservaçõesFinaisdoPerito || ''
       };
 
       const response = await fetch(webhookUrl, {
@@ -220,9 +267,13 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
         throw new Error(resJson.message || 'Erro no Apps Script');
       }
 
+      const fotosMsg = fotosLocaisEncontradas > 0 
+        ? ` (${fotosLocaisEncontradas} fotos locais anexadas)`
+        : (pastaOrigemUrl ? ' (fotos replicadas da pasta do Google Drive)' : '');
+
       setResendStatus({
         type: 'success',
-        message: 'Vistoria reenviada com sucesso!'
+        message: `Vistoria e Laudo reenviados com sucesso!${fotosMsg}`
       });
       fetchRecords();
     } catch (err: any) {
