@@ -230,21 +230,22 @@ function doPost(e) {
     var nomeAutorOriginal = data.nomeAutor || "Autor Sem Nome";
     var nomeAutor = capitalizarNome(nomeAutorOriginal);
     
-    // 🛡️ CAMADA 1: IDEMPOTÊNCIA POR CACHE DO GOOGLE (6 horas)
+    // 🛡️ CAMADA 1: PREVENÇÃO CONTRA DUPLO CLIQUE ACIDENTAL (20 segundos)
     var cache = CacheService.getScriptCache();
     var idInspecao = data.id ? String(data.id) : (nomeAutor + "_" + (data.numeroProcesso || "") + "_" + (data.dataVistoria || ""));
     var cacheKey = "proc_" + idInspecao.replace(/[^a-zA-Z0-9_]/g, "");
 
-    if (cache.get(cacheKey)) {
+    if (cache.get(cacheKey) === "processando") {
       return ContentService.createTextOutput(JSON.stringify({ 
         status: "sucesso", 
-        message: "Vistoria já gravada anteriormente (duplicação prevenida por cache).",
+        message: "Uma requisição idêntica já está sendo processada no momento.",
         perito: config.nome,
         duplicatePrevented: true
       })).setMimeType(ContentService.MimeType.JSON);
     }
+    cache.put(cacheKey, "processando", 20);
     
-    // 1. Cria ou recupera a pasta no Google Drive do Perito
+    // 1. Cria nova pasta no Google Drive do Perito com versionamento (NÃO sobrescreve nem apaga vistorias anteriores)
     var mainFolder = DriveApp.getFolderById(mainFolderId);
     
     var dataVistoriaFormatada = "";
@@ -258,7 +259,7 @@ function doPost(e) {
     }
     
     var pastaVistoriaNome = dataVistoriaFormatada ? (dataVistoriaFormatada + " - " + nomeAutor) : nomeAutor;
-    var inspectionFolder = criarOuObterPasta(mainFolder, pastaVistoriaNome);
+    var inspectionFolder = criarPastaVistoriaComVersionamento(mainFolder, pastaVistoriaNome);
     
     var subfolderImovel = criarOuObterPasta(inspectionFolder, "Fotos da Residência");
     var subfolderMedidor = criarOuObterPasta(inspectionFolder, "Fotos do Medidor");
@@ -288,21 +289,15 @@ function doPost(e) {
       sheet = ss.insertSheet(nomeAba);
     }
     
-    // 🛡️ CAMADA 2: ANTI-DUPLICIDADE POR VERIFICAÇÃO NAS ÚLTIMAS 30 LINHAS
-    if (isRegistroDuplicado(sheet, data.numeroProcesso, nomeAutor, data.dataVistoria)) {
-      cache.put(cacheKey, "gravado", 21600);
-      return ContentService.createTextOutput(JSON.stringify({ 
-        status: "sucesso", 
-        message: "Vistoria já consta na planilha (duplicação prevenida na planilha).",
-        folderUrl: inspectionFolder.getUrl(),
-        perito: config.nome,
-        duplicatePrevented: true
-      })).setMimeType(ContentService.MimeType.JSON);
+    // 🛡️ CAMADA 2: IDENTIFICAÇÃO DE VISTORIA REPETIDA / REENVIADA
+    // Se o processo já existir, NÃO bloqueia o microserviço: gera nova linha, nova pasta e novo Laudo Oficial!
+    var ehReenvio = isRegistroDuplicado(sheet, data.numeroProcesso, nomeAutor, data.dataVistoria);
+    if (ehReenvio) {
+      console.log("ℹ️ Vistoria repetida/reenviada detectada para o processo " + data.numeroProcesso + ". Gerando nova pasta isolada e novo Laudo no microserviço.");
     }
     
     // Gravação 100% DINÂMICA na planilha
     var linhaGravadaIndex = gravarLinhaVistoriaDinamica(sheet, data, nomeAutor, inspectionFolder.getUrl(), "");
-    cache.put(cacheKey, "gravado", 21600);
 
     // 4. Integração Pré-Vistoria: Lê estritamente de "Processos Energia"
     var urlLaudoGerado = "";
@@ -767,6 +762,24 @@ function criarOuObterPasta(parentFolder, nomePasta) {
   var pastas = parentFolder.getFoldersByName(nomePasta);
   if (pastas.hasNext()) return pastas.next();
   return parentFolder.createFolder(nomePasta);
+}
+
+function criarPastaVistoriaComVersionamento(parentFolder, baseName) {
+  var pastas = parentFolder.getFoldersByName(baseName);
+  if (!pastas.hasNext()) {
+    return parentFolder.createFolder(baseName);
+  }
+  // Se a pasta já existir (reenvio/vistoria repetida), cria uma NOVA pasta numerada
+  // garantindo que os arquivos da vistoria anterior NUNCA sejam apagados ou sobrescritos
+  var count = 2;
+  while (true) {
+    var nomeVersao = baseName + " (Vistoria " + count + ")";
+    var busca = parentFolder.getFoldersByName(nomeVersao);
+    if (!busca.hasNext()) {
+      return parentFolder.createFolder(nomeVersao);
+    }
+    count++;
+  }
 }
 
 function salvarFotosBase64(photosArray, targetFolder, prefixo) {
