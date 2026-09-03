@@ -409,6 +409,8 @@ function doPost(e) {
               console.warn("Aviso ao responder Juízo modular:", eJ.toString());
             }
 
+            Utilities.sleep(1500);
+
             // 2. Autor
             try {
               var rA = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
@@ -424,6 +426,8 @@ function doPost(e) {
             } catch (eA) {
               console.warn("Aviso ao responder Autor modular:", eA.toString());
             }
+
+            Utilities.sleep(1500);
 
             // 3. Réu
             try {
