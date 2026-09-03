@@ -695,9 +695,9 @@ function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, 
   var colHistIni = acharIndiceColuna(headers, ["datainiciohistoricofaturas", "iniciofaturas", "faturasinicio"]);
   var colHistFim = acharIndiceColuna(headers, ["datafimhistoricofaturas", "fimfaturas", "faturasfim"]);
   var colCsv = acharIndiceColuna(headers, ["historicodeconsumocsvmultilinha", "historicodeconsumo", "historicocsv", "csv"]);
-  var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "quesitosdojuiz", "quesitosjuiz", "juizobruto", "juizobrutos", "juizo", "juiz"]);
-  var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor", "quesitosdaautora", "quesitosautora", "autorbruto", "autorbrutos", "autor", "autora"]);
-  var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu", "quesitosdare", "quesitosre", "reubruto", "reubrutos", "reu", "re"]);
+  var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "quesitosdojuiz", "quesitosjuiz", "quesitosjuizobruto", "perguntasdojuizo", "juizobrutos", "juizobruto"]);
+  var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor", "quesitosdaautora", "quesitosautora", "quesitosautorbruto", "perguntasdoautor", "autorbrutos", "autorbruto"]);
+  var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu", "quesitosdare", "quesitosre", "quesitosreubruto", "perguntasdoreu", "reubrutos", "reubruto"]);
   var colStatus = acharIndiceColuna(headers, ["statusdaautomacao", "status", "situacao"]);
   var colLink = acharIndiceColuna(headers, ["linkdolaudopdf", "laudopdf", "linklaudo", "laudo"]);
 
