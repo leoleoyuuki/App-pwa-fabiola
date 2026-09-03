@@ -376,9 +376,9 @@ function doPost(e) {
 
         // --- ETAPA 1: IA Gemini redige as respostas e prepara arquivos .TeX / .CSV (~6 a 12s) ---
         var respostasQuesitos = {
-          quesitosDoJuizo: "\\textbf{Quesitos do Juízo:} Aguardando manifestação técnica.",
-          quesitosDoAutor: "\\textbf{Quesitos do Autor:} Aguardando manifestação técnica.",
-          quesitosDoReu: "\\textbf{Quesitos do Réu:} Aguardando manifestação técnica."
+          quesitosDoJuizo: dadosProcesso.quesitosJuizo || "",
+          quesitosDoAutor: dadosProcesso.quesitosAutor || "",
+          quesitosDoReu: dadosProcesso.quesitosReu || ""
         };
 
         try {
@@ -695,9 +695,9 @@ function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, 
   var colHistIni = acharIndiceColuna(headers, ["datainiciohistoricofaturas", "iniciofaturas", "faturasinicio"]);
   var colHistFim = acharIndiceColuna(headers, ["datafimhistoricofaturas", "fimfaturas", "faturasfim"]);
   var colCsv = acharIndiceColuna(headers, ["historicodeconsumocsvmultilinha", "historicodeconsumo", "historicocsv", "csv"]);
-  var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo"]);
-  var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor"]);
-  var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu"]);
+  var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "quesitosdojuiz", "quesitosjuiz", "juizobruto", "juizobrutos", "juizo", "juiz"]);
+  var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor", "quesitosdaautora", "quesitosautora", "autorbruto", "autorbrutos", "autor", "autora"]);
+  var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu", "quesitosdare", "quesitosre", "reubruto", "reubrutos", "reu", "re"]);
   var colStatus = acharIndiceColuna(headers, ["statusdaautomacao", "status", "situacao"]);
   var colLink = acharIndiceColuna(headers, ["linkdolaudopdf", "laudopdf", "linklaudo", "laudo"]);
 
