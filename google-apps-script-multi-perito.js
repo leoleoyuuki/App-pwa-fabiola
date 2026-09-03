@@ -387,33 +387,75 @@ function doPost(e) {
             UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/health", { muteHttpExceptions: true });
           } catch (eWarm) {}
 
-          var payloadQuesitos = {
-            processo: dadosProcesso,
-            vistoria: dadosVistoria
-          };
-          var respQuesitosHttp = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
-            method: "post",
-            contentType: "application/json",
-            payload: JSON.stringify(payloadQuesitos),
-            muteHttpExceptions: true
-          });
-          var jsonQuesitos = JSON.parse(respQuesitosHttp.getContentText());
-          if (jsonQuesitos) {
-            if (jsonQuesitos.respostas) {
+          var totalQ = contarQuesitosEstimados(dadosProcesso);
+          console.log("[Quesitos] Quantidade estimada de itens a responder: " + totalQ);
+
+          if (totalQ > 6) {
+            console.log("[Quesitos] Volume alto detectado (" + totalQ + " itens). Dividindo em requisições modulares por parte para evitar timeout...");
+
+            // 1. Juízo
+            try {
+              var rJ = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
+                method: "post",
+                contentType: "application/json",
+                payload: JSON.stringify({ processo: dadosProcesso, vistoria: dadosVistoria, parte: "juizo" }),
+                muteHttpExceptions: true
+              });
+              var jJ = JSON.parse(rJ.getContentText());
+              if (jJ && jJ.respostas && jJ.respostas.quesitosDoJuizo) {
+                respostasQuesitos.quesitosDoJuizo = jJ.respostas.quesitosDoJuizo;
+              }
+            } catch (eJ) {
+              console.warn("Aviso ao responder Juízo modular:", eJ.toString());
+            }
+
+            // 2. Autor
+            try {
+              var rA = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
+                method: "post",
+                contentType: "application/json",
+                payload: JSON.stringify({ processo: dadosProcesso, vistoria: dadosVistoria, parte: "autor" }),
+                muteHttpExceptions: true
+              });
+              var jA = JSON.parse(rA.getContentText());
+              if (jA && jA.respostas && jA.respostas.quesitosDoAutor) {
+                respostasQuesitos.quesitosDoAutor = jA.respostas.quesitosDoAutor;
+              }
+            } catch (eA) {
+              console.warn("Aviso ao responder Autor modular:", eA.toString());
+            }
+
+            // 3. Réu
+            try {
+              var rR = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
+                method: "post",
+                contentType: "application/json",
+                payload: JSON.stringify({ processo: dadosProcesso, vistoria: dadosVistoria, parte: "reu" }),
+                muteHttpExceptions: true
+              });
+              var jR = JSON.parse(rR.getContentText());
+              if (jR && jR.respostas && jR.respostas.quesitosDoReu) {
+                respostasQuesitos.quesitosDoReu = jR.respostas.quesitosDoReu;
+              }
+            } catch (eR) {
+              console.warn("Aviso ao responder Réu modular:", eR.toString());
+            }
+          } else {
+            // Processo com volume normal: requisição única
+            var payloadQuesitos = {
+              processo: dadosProcesso,
+              vistoria: dadosVistoria,
+              parte: "tudo"
+            };
+            var respQuesitosHttp = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
+              method: "post",
+              contentType: "application/json",
+              payload: JSON.stringify(payloadQuesitos),
+              muteHttpExceptions: true
+            });
+            var jsonQuesitos = JSON.parse(respQuesitosHttp.getContentText());
+            if (jsonQuesitos && jsonQuesitos.respostas) {
               respostasQuesitos = jsonQuesitos.respostas;
-            }
-            // 🛡️ FALLBACK GARANTIDO: Salva os arquivos LaTeX (.tex) e CSV (.csv) imediatamente no Drive
-            if (jsonQuesitos.dadosTex) {
-              var blobDadosTex = Utilities.newBlob(jsonQuesitos.dadosTex, "text/plain; charset=utf-8", "dados.tex");
-              inspectionFolder.createFile(blobDadosTex);
-            }
-            if (jsonQuesitos.modeloAutoTex) {
-              var blobModeloTex = Utilities.newBlob(jsonQuesitos.modeloAutoTex, "text/plain; charset=utf-8", "modelo_auto.tex");
-              inspectionFolder.createFile(blobModeloTex);
-            }
-            if (jsonQuesitos.historicoCsv) {
-              var blobCsv = Utilities.newBlob(jsonQuesitos.historicoCsv, "text/csv; charset=utf-8", "historico_consumo.csv");
-              inspectionFolder.createFile(blobCsv);
             }
           }
         } catch (errQ) {
@@ -925,4 +967,24 @@ function capitalizarNome(texto) {
     if (index > 0 && preposicoes.indexOf(palavra) !== -1) return palavra;
     return palavra.charAt(0).toUpperCase() + palavra.slice(1);
   }).join(" ").trim();
+}
+
+function contarQuesitosEstimados(proc) {
+  if (!proc) return 0;
+  var total = 0;
+  var campos = ['quesitosJuizo', 'quesitosAutor', 'quesitosReu'];
+  for (var i = 0; i < campos.length; i++) {
+    var txt = String(proc[campos[i]] || '').trim();
+    if (txt.length > 15) {
+      if (txt.indexOf('\n') !== -1) {
+        total += txt.split(/\r?\n+/).filter(function(l) { return l.trim().length > 3; }).length;
+      } else if (txt.indexOf(';') !== -1) {
+        total += txt.split(/;/).filter(function(l) { return l.trim().length > 3; }).length;
+      } else {
+        var m = txt.match(/(?:\d+[\.\)\-]|[a-zA-Z][\.\)])\s+/g);
+        total += m ? m.length : 1;
+      }
+    }
+  }
+  return total;
 }
