@@ -71,6 +71,13 @@ function doGet(e) {
         if (dataProcessos.length > 1) {
           var headers = dataProcessos[0];
           
+          var colData = acharIndiceColuna(headers, ["datadavistoria", "datavistoria", "dataagendada", "dataagendamento", "dataagenda", "agendamento", "data", "dia"]);
+          if (colData < 0 && headers.length > 0) {
+            var h0 = String(headers[0] || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            if (h0.indexOf("data") !== -1 || h0.indexOf("dia") !== -1 || h0.indexOf("agenda") !== -1) {
+              colData = 0;
+            }
+          }
           var colTipo = acharIndiceColuna(headers, ["tipodeacaoconsumotoi", "tipodeacao", "tipoacao", "acao"]);
           var colProc = acharIndiceColuna(headers, ["numerodoprocessocnj", "numerodoprocesso", "processo", "numprocesso", "cnj"]);
           var colAutor = acharIndiceColuna(headers, ["nomedoautor", "autor", "parteautora"]);
@@ -107,6 +114,7 @@ function doGet(e) {
             
             processos.push({
               linhaIndex: i + 1,
+              dataVistoria: colData >= 0 ? String(row[colData] || "").trim() : "",
               tipoAcao: colTipo >= 0 ? String(row[colTipo] || "Consumo") : "Consumo",
               numeroProcesso: numProcVal,
               nomeAutor: autorVal,
@@ -365,6 +373,7 @@ function doPost(e) {
           medidorChip: data.medidorChip || "Não",
           condicoesMedidor: data.condicoesMedidor || "Boa (Lacrado)",
           corteEnergia: data.corteEnergia || "Não",
+          notificacaoPreviaCorte: data.notificacaoPreviaCorte || "Não",
           observacoesMedidor: data.observacoesMedidor || "",
           representacaoAutor: data.representacaoAutor || "Presente",
           representacaoReu: data.representacaoReu || "Ausente",
@@ -612,6 +621,8 @@ function gravarLinhaVistoriaDinamica(sheet, data, nomeAutor, inspectionFolderUrl
     "condicoesmedidor": data.condicoesMedidor || "Boa (Lacrado)",
     "cortedeenergia": data.corteEnergia || "Não",
     "corte": data.corteEnergia || "Não",
+    "notificacaopreviacorte": data.notificacaoPreviaCorte || "Não",
+    "notificacaoprevia": data.notificacaoPreviaCorte || "Não",
     "pessoasresidentes": data.qtdPessoas || "1",
     "qtdpessoas": data.qtdPessoas || "1",
     "quantidadedecomodos": data.qtdComodos || "1",
@@ -724,6 +735,13 @@ function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, 
 
   var headers = dataRange[0];
 
+  var colData = acharIndiceColuna(headers, ["datadavistoria", "datavistoria", "dataagendada", "dataagendamento", "dataagenda", "agendamento", "data", "dia"]);
+  if (colData < 0 && headers.length > 0) {
+    var h0 = String(headers[0] || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (h0.indexOf("data") !== -1 || h0.indexOf("dia") !== -1 || h0.indexOf("agenda") !== -1) {
+      colData = 0;
+    }
+  }
   var colTipo = acharIndiceColuna(headers, ["tipodeacaoconsumotoi", "tipodeacao", "tipoacao", "acao"]);
   var colProc = acharIndiceColuna(headers, ["numerodoprocessocnj", "numerodoprocesso", "processo", "numprocesso", "cnj"]);
   var colAutor = acharIndiceColuna(headers, ["nomedoautor", "autor", "parteautora"]);
@@ -806,6 +824,7 @@ function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, 
         historicoConsumoInicio: colHistIni >= 0 ? String(rowTarget[colHistIni] || "") : "",
         historicoConsumoFim: colHistFim >= 0 ? String(rowTarget[colHistFim] || "") : "",
         historicoConsumoCsv: colCsv >= 0 ? String(rowTarget[colCsv] || "") : "",
+        dataVistoria: colData >= 0 ? String(rowTarget[colData] || "") : "",
         quesitosJuizo: colQJuizo >= 0 ? String(rowTarget[colQJuizo] || "") : "",
         quesitosAutor: colQAutor >= 0 ? String(rowTarget[colQAutor] || "") : "",
         quesitosReu: colQReu >= 0 ? String(rowTarget[colQReu] || "") : ""

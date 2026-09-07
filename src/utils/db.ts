@@ -47,6 +47,7 @@ export interface InspectionData {
   medidorChip: string;
   condicoesMedidor: string;
   corteEnergia: string;
+  notificacaoPreviaCorte?: string;
   observacoesMedidor?: string;
   qtdPessoas: string;
   qtdComodos: string;

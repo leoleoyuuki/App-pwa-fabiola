@@ -193,6 +193,7 @@ export async function syncInspection(
       medidorChip: inspection.medidorChip,
       condicoesMedidor: inspection.condicoesMedidor,
       corteEnergia: inspection.corteEnergia,
+      notificacaoPreviaCorte: inspection.notificacaoPreviaCorte || 'Não',
       observacoesMedidor: inspection.observacoesMedidor || '',
       qtdPessoas: inspection.qtdPessoas,
       qtdComodos: inspection.qtdComodos,
@@ -307,6 +308,7 @@ export async function syncInspection(
     formData.append('medidorChip', inspection.medidorChip);
     formData.append('condicoesMedidor', inspection.condicoesMedidor);
     formData.append('corteEnergia', inspection.corteEnergia);
+    formData.append('notificacaoPreviaCorte', inspection.notificacaoPreviaCorte || 'Não');
     formData.append('qtdPessoas', inspection.qtdPessoas);
     formData.append('qtdComodos', inspection.qtdComodos);
     formData.append('numLampadas', inspection.numLampadas);

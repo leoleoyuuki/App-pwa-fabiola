@@ -19,7 +19,8 @@ import {
   Home,
   Tv,
   RefreshCw,
-  PlusCircle
+  PlusCircle,
+  AlertTriangle
 } from 'lucide-react';
 
 interface InspectionFormProps {
@@ -96,6 +97,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   const [medidorChip, setMedidorChip] = useState('Não');
   const [condicoesMedidor, setCondicoesMedidor] = useState('Boa (Lacrado)');
   const [corteEnergia, setCorteEnergia] = useState('Não');
+  const [notificacaoPreviaCorte, setNotificacaoPreviaCorte] = useState('Não');
   const [observacoesMedidor, setObservacoesMedidor] = useState('');
   const [qtdPessoas, setQtdPessoas] = useState('1');
   const [qtdComodos, setQtdComodos] = useState('1');
@@ -154,6 +156,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     setMedidorChip(draft.medidorChip || 'Não');
     setCondicoesMedidor(draft.condicoesMedidor || 'Boa (Lacrado)');
     setCorteEnergia(draft.corteEnergia || 'Não');
+    setNotificacaoPreviaCorte(draft.notificacaoPreviaCorte || 'Não');
     setObservacoesMedidor(draft.observacoesMedidor || '');
     setQtdPessoas(draft.qtdPessoas || '1');
     setQtdComodos(draft.qtdComodos || '1');
@@ -190,6 +193,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     setMedidorChip('Não');
     setCondicoesMedidor('Boa (Lacrado)');
     setCorteEnergia('Não');
+    setNotificacaoPreviaCorte('Não');
     setObservacoesMedidor('');
     setQtdPessoas('1');
     setQtdComodos('1');
@@ -315,6 +319,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
           medidorChip,
           condicoesMedidor,
           corteEnergia,
+          notificacaoPreviaCorte,
           observacoesMedidor,
           qtdPessoas,
           qtdComodos,
@@ -345,7 +350,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     currentDraftId, nomeAutor, numeroProcesso, reuConcessionaria, tipoAcao, dataVistoria,
     numeroVistoria, periodoVistoria, representacaoAutor, representacaoReu,
     observacoesPresenca, numeroMedidor, medidorChip, condicoesMedidor,
-    corteEnergia, observacoesMedidor, qtdPessoas, qtdComodos, numLampadas, numTvs,
+    corteEnergia, notificacaoPreviaCorte, observacoesMedidor, qtdPessoas, qtdComodos, numLampadas, numTvs,
     numVentiladores, numVentiladoresTeto, numArCondicionados, numGeladeiras,
     numChuveiros, numMaquinasLavar, numFreezers, checklist, observacoesFinais,
     photosImovel, photosMedidor, userEmail
@@ -355,9 +360,6 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>, target: 'imovel' | 'medidor') => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
-    setIsLoadingPhotos(true);
-    setErrorMsg(null);
 
     const newPhotos: PhotoData[] = [];
 
@@ -434,6 +436,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
       medidorChip,
       condicoesMedidor,
       corteEnergia,
+      notificacaoPreviaCorte,
       observacoesMedidor: observacoesMedidor.trim(),
       qtdPessoas,
       qtdComodos,
@@ -607,6 +610,10 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
       return pDate === selectedFilterDate;
     }
     return true;
+  }).sort((a, b) => {
+    const da = normalizeDate(a.dataVistoria) || '9999-99-99';
+    const db = normalizeDate(b.dataVistoria) || '9999-99-99';
+    return da.localeCompare(db);
   });
 
   const searchedProcesses = scheduledProcesses.filter(p => {
@@ -840,7 +847,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
                     <option value="" disabled>-- Toque para escolher a vistoria --</option>
                     {filteredProcesses.map((p, idx) => (
                       <option key={idx} value={idx}>
-                        {p.nomeAutor} {p.tipoAcao ? `[${p.tipoAcao}]` : ''} — {p.numeroProcesso ? `${p.numeroProcesso} | ` : ''}{p.reuConcessionaria || ''}
+                        {p.dataVistoria ? `[${formatDisplayDate(p.dataVistoria)}] ` : ''}{p.nomeAutor} {p.tipoAcao ? `(${p.tipoAcao})` : ''} — {p.numeroProcesso ? `${p.numeroProcesso} | ` : ''}{p.reuConcessionaria || ''}
                       </option>
                     ))}
                   </select>
@@ -1054,6 +1061,18 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
             setCorteEnergia,
             ['Sim', 'Não', 'Outro'],
             <Zap size={14} style={{ color: 'var(--accent-gold)' }} />
+          )}
+
+          {corteEnergia === 'Sim' && (
+            <div style={{ padding: '12px 14px', background: 'rgba(217, 119, 6, 0.08)', borderRadius: '8px', border: '1px solid rgba(217, 119, 6, 0.25)' }}>
+              {renderRadio(
+                'Houve notificação prévia de corte comprovada nos autos?',
+                notificacaoPreviaCorte,
+                setNotificacaoPreviaCorte,
+                ['Não', 'Sim'],
+                <AlertTriangle size={14} style={{ color: 'var(--accent-gold)' }} />
+              )}
+            </div>
           )}
 
           <div className="form-group" style={{ marginBottom: 0 }}>
