@@ -99,7 +99,8 @@ function doGet(e) {
           var colConsRecl = acharIndiceColuna(headers, ["consumomedioreclamadokwh", "consumoreclamado", "mediareclamada"]);
           var colHistIni = acharIndiceColuna(headers, ["datainiciohistoricofaturas", "iniciofaturas", "faturasinicio"]);
           var colHistFim = acharIndiceColuna(headers, ["datafimhistoricofaturas", "fimfaturas", "faturasfim"]);
-          var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "quesitosdojuiz", "quesitosjuiz", "quesitosjuizobruto", "perguntasdojuizo", "juizobrutos", "juizobruto", "quesitosjudiciais", "quesitosdojuizoformatado", "quesitosdojuizotexto", "quesitos"]);
+          var colCsv = acharIndiceColuna(headers, ["historicoconsumocsv", "historicocsv", "faturascsv", "csvconsumo", "csv", "consumocsv"]);
+          var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "quesitosdojuiz", "quesitosjuiz", "quesitosjuizobruto", "perguntasdojuizo", "juizobrutos", "juizobruto", "quesitosjudiciais", "quesitosdojuizoformatado", "quesitosdojuizotexto", "pontoscontrovertidos", "pontoscontrovertidosjuizo", "decisaosaneadora", "saneador", "juizo", "quesitos"]);
           var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor", "quesitosdaautora", "quesitosautora", "quesitosautorbruto", "perguntasdoautor", "autorbrutos", "autorbruto", "quesitosdoautorformatado", "quesitosdoautortexto"]);
           var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu", "quesitosdare", "quesitosre", "quesitosreubruto", "perguntasdoreu", "reubrutos", "reubruto", "quesitosdoreuformatado", "quesitosdoreutexto", "quesitosdareu"]);
           var colStatus = acharIndiceColuna(headers, ["statusdaautomacao", "status", "situacao"]);
@@ -762,7 +763,8 @@ function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, 
   var colConsRecl = acharIndiceColuna(headers, ["consumomedioreclamadokwh", "consumoreclamado", "mediareclamada"]);
   var colHistIni = acharIndiceColuna(headers, ["datainiciohistoricofaturas", "iniciofaturas", "faturasinicio"]);
   var colHistFim = acharIndiceColuna(headers, ["datafimhistoricofaturas", "fimfaturas", "faturasfim"]);
-  var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "quesitosdojuiz", "quesitosjuiz", "quesitosjuizobruto", "perguntasdojuizo", "juizobrutos", "juizobruto", "quesitosjudiciais", "quesitosdojuizoformatado", "quesitosdojuizotexto", "quesitos"]);
+  var colCsv = acharIndiceColuna(headers, ["historicoconsumocsv", "historicocsv", "faturascsv", "csvconsumo", "csv", "consumocsv"]);
+  var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "quesitosdojuiz", "quesitosjuiz", "quesitosjuizobruto", "perguntasdojuizo", "juizobrutos", "juizobruto", "quesitosjudiciais", "quesitosdojuizoformatado", "quesitosdojuizotexto", "pontoscontrovertidos", "pontoscontrovertidosjuizo", "decisaosaneadora", "saneador", "juizo", "quesitos"]);
   var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor", "quesitosdaautora", "quesitosautora", "quesitosautorbruto", "perguntasdoautor", "autorbrutos", "autorbruto", "quesitosdoautorformatado", "quesitosdoautortexto"]);
   var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu", "quesitosdare", "quesitosre", "quesitosreubruto", "perguntasdoreu", "reubrutos", "reubruto", "quesitosdoreuformatado", "quesitosdoreutexto", "quesitosdareu"]);
   var colStatus = acharIndiceColuna(headers, ["statusdaautomacao", "status", "situacao"]);
