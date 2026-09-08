@@ -99,10 +99,9 @@ function doGet(e) {
           var colConsRecl = acharIndiceColuna(headers, ["consumomedioreclamadokwh", "consumoreclamado", "mediareclamada"]);
           var colHistIni = acharIndiceColuna(headers, ["datainiciohistoricofaturas", "iniciofaturas", "faturasinicio"]);
           var colHistFim = acharIndiceColuna(headers, ["datafimhistoricofaturas", "fimfaturas", "faturasfim"]);
-          var colCsv = acharIndiceColuna(headers, ["historicodeconsumocsvmultilinha", "historicodeconsumo", "historicocsv", "csv"]);
-          var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo"]);
-          var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor"]);
-          var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu"]);
+          var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "quesitosdojuiz", "quesitosjuiz", "quesitosjuizobruto", "perguntasdojuizo", "juizobrutos", "juizobruto", "quesitosjudiciais", "quesitosdojuizoformatado", "quesitosdojuizotexto", "quesitos"]);
+          var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor", "quesitosdaautora", "quesitosautora", "quesitosautorbruto", "perguntasdoautor", "autorbrutos", "autorbruto", "quesitosdoautorformatado", "quesitosdoautortexto"]);
+          var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu", "quesitosdare", "quesitosre", "quesitosreubruto", "perguntasdoreu", "reubrutos", "reubruto", "quesitosdoreuformatado", "quesitosdoreutexto", "quesitosdareu"]);
           var colStatus = acharIndiceColuna(headers, ["statusdaautomacao", "status", "situacao"]);
           
           for (var i = 1; i < dataProcessos.length; i++) {
@@ -763,10 +762,9 @@ function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, 
   var colConsRecl = acharIndiceColuna(headers, ["consumomedioreclamadokwh", "consumoreclamado", "mediareclamada"]);
   var colHistIni = acharIndiceColuna(headers, ["datainiciohistoricofaturas", "iniciofaturas", "faturasinicio"]);
   var colHistFim = acharIndiceColuna(headers, ["datafimhistoricofaturas", "fimfaturas", "faturasfim"]);
-  var colCsv = acharIndiceColuna(headers, ["historicodeconsumocsvmultilinha", "historicodeconsumo", "historicocsv", "csv"]);
-  var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "quesitosdojuiz", "quesitosjuiz", "quesitosjuizobruto", "perguntasdojuizo", "juizobrutos", "juizobruto"]);
-  var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor", "quesitosdaautora", "quesitosautora", "quesitosautorbruto", "perguntasdoautor", "autorbrutos", "autorbruto"]);
-  var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu", "quesitosdare", "quesitosre", "quesitosreubruto", "perguntasdoreu", "reubrutos", "reubruto"]);
+  var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "quesitosdojuiz", "quesitosjuiz", "quesitosjuizobruto", "perguntasdojuizo", "juizobrutos", "juizobruto", "quesitosjudiciais", "quesitosdojuizoformatado", "quesitosdojuizotexto", "quesitos"]);
+  var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor", "quesitosdaautora", "quesitosautora", "quesitosautorbruto", "perguntasdoautor", "autorbrutos", "autorbruto", "quesitosdoautorformatado", "quesitosdoautortexto"]);
+  var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu", "quesitosdare", "quesitosre", "quesitosreubruto", "perguntasdoreu", "reubrutos", "reubruto", "quesitosdoreuformatado", "quesitosdoreutexto", "quesitosdareu"]);
   var colStatus = acharIndiceColuna(headers, ["statusdaautomacao", "status", "situacao"]);
   var colLink = acharIndiceColuna(headers, ["linkdolaudopdf", "laudopdf", "linklaudo", "laudo"]);
 
