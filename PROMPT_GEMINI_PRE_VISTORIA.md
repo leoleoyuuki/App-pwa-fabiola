@@ -33,30 +33,30 @@ Antes de inserir ou atualizar a linha do processo na aba `[NOME_DA_ABA]`, você 
 | :---: | :--- | :--- |
 | **1 (A)** | `Data da Vistoria` | `DD/MM/AAAA` se agendada nos autos, ou vazio `""` se não agendada |
 | **2 (B)** | `Tipo de Ação (Consumo / TOI)` | `"Consumo"` ou `"TOI"` |
-| **3 (C)** | `Número do Processo (CNJ)` | Apenas dígitos (ex: `08043193920238190075`) ou formato CNJ |
-| **4 (D)** | `Nome do Autor` | Nome completo do Autor(a) |
-| **5 (E)** | `Nome do Réu` | Nome completo da Concessionária Ré (ex: `Light`, `Enel`) |
-| **6 (F)** | `Vara / Comarca` | Vara Cível e Comarca (ex: `1ª Vara Cível de Magé`) |
-| **7 (G)** | `Número do Cliente (Instalação)` | Código de cliente / instalação / UC |
-| **8 (H)** | `Número do TOI` | Número do Termo de Ocorrência ou `""` |
-| **9 (I)** | `Data Lavratura TOI` | `DD/MM/AAAA` ou `""` |
+| **3 (C)** | `Número do Processo (CNJ)` | Apenas dígitos (ex: `11111111120248190001`) ou formato CNJ |
+| **4 (D)** | `Nome do Autor` | Nome completo do Autor(a) extraído dos autos |
+| **5 (E)** | `Nome do Réu` | Nome da Concessionária Ré (ex: `Light`, `Enel`) |
+| **6 (F)** | `Vara / Comarca` | Vara Cível e Comarca (ex: `1ª Vara Cível da Comarca de [CIDADE]`) |
+| **7 (G)** | `Número do Cliente (Instalação)` | Código de cliente / instalação / UC (ex: `11111111`) |
+| **8 (H)** | `Número do TOI` | Número do Termo de Ocorrência (ex: `22222222`) ou `""` |
+| **9 (I)** | `Data Lavratura TOI` | `DD/MM/AAAA` (ex: `11/11/1111`) ou `""` |
 | **10 (J)** | `Irregularidade Alegada (Gato / Desvio)` | Descrição da irregularidade apontada pela ré ou `""` |
-| **11 (K)** | `Valor de Recuperação Cobrado (R$)` | Valor numérico (ex: `405.30`) ou `""` |
+| **11 (K)** | `Valor de Recuperação Cobrado (R$)` | Valor numérico (ex: `999.99`) ou `""` |
 | **12 (L)** | `Endereço Completo da Perícia` | Endereço do imóvel periciado |
 | **13 (M)** | `Objetivo da Perícia` | Objeto técnico saneador / perícia |
 | **14 (N)** | `Resumo do Processo` | Síntese concisa e neutra da lide |
 | **15 (O)** | `Alegações do Autor (Formatado com \\)` | Tópicos dos fatos do autor separados por `\\` |
 | **16 (P)** | `Contestações do Réu (Formatado com \\)` | Tópicos da defesa da ré separados por `\\` |
-| **17 (Q)** | `Início Período Controvertido (Mês/Ano)` | Mês/Ano inicial (ex: `12/2023`) ou `""` |
-| **18 (R)** | `Fim Período Controvertido (Mês/Ano)` | Mês/Ano final (ex: `01/2024`) ou `""` |
-| **19 (S)** | `Consumo Médio Regular (kWh)` | Média aritmética de consumo em kWh (ex: `199`) |
-| **20 (T)** | `Consumo Médio Reclamado (kWh)` | Mesma média apurada do histórico em kWh (ex: `199`) |
-| **21 (U)** | `Data Início Histórico Faturas` | `DD/MM/AAAA` da primeira fatura (ex: `01/07/2023`) |
-| **22 (V)** | `Data Fim Histórico Faturas` | `DD/MM/AAAA` da última fatura (ex: `01/02/2024`) |
+| **17 (Q)** | `Início Período Controvertido (Mês/Ano)` | Mês/Ano inicial (ex: `01/2024`) ou `""` |
+| **18 (R)** | `Fim Período Controvertido (Mês/Ano)` | Mês/Ano final (ex: `02/2024`) ou `""` |
+| **19 (S)** | `Consumo Médio Regular (kWh)` | Média aritmética de consumo em kWh (ex: `111`) |
+| **20 (T)** | `Consumo Médio Reclamado (kWh)` | Mesma média apurada do histórico em kWh (ex: `111`) |
+| **21 (U)** | `Data Início Histórico Faturas` | `DD/MM/AAAA` da primeira fatura (ex: `01/01/2023`) |
+| **22 (V)** | `Data Fim Histórico Faturas` | `DD/MM/AAAA` da última fatura (ex: `01/12/2023`) |
 | **23 (W)** | `Histórico de Consumo (CSV Multilinha)` | CSV completo com colunas e linha `MÉDIA` |
 | **24 (X)` | `Quesitos do Juízo (Brutos)` | Texto integral dos quesitos do Juízo |
 | **25 (Y)** | `Quesitos do Autor (Brutos)` | Texto integral dos quesitos do Autor |
-| **26 (Z)** | `Quesitos do Réu (Brutos)` | Texto integral dos quesitos do Réu |
+| **26 (Z)` | `Quesitos do Réu (Brutos)` | Texto integral dos quesitos do Réu |
 | **27 (AA)** | `Status da Automação` | Preencher como `"Pronto para Vistoria"` |
 
 > ⚠️ **REGRA CRÍTICA PARA A COLUNA 1 (A):**
@@ -81,8 +81,8 @@ Antes de inserir ou atualizar a linha do processo na aba `[NOME_DA_ABA]`, você 
 3. **Transcrição Integral de Tabelas e Extratos (SEM IGNORAR NENHUMA LINHA):**
    - Transcreva **TODAS as linhas da tabela de faturamento exatamente como constam nos autos**, preservando a íntegra documental do processo judicial.
    - **Regras para cada linha da tabela:**
-     a) **Linhas com consumo informado:** Extraia a data/referência, o tipo (Fatura/Refatura/NORMAL), o valor numérico de `Consumo (Kwh)` e, no campo de observações, inclua SEMPRE o status de pagamento JUNTO com o valor cobrado em Reais (ex.: `Paga - R$ 173.61`, `Em aberto - R$ 516.74` ou `Período controvertido - Em aberto - R$ 516.74`).
-     b) **Linhas com consumo em branco ou zerado (ex: faturas substituídas ou zeradas):** NÃO ignore a linha. Preencha o consumo com `0` e registre o valor e pagamento na observação (ex.: `Paga - R$ 531.45`).
+     a) **Linhas com consumo informado:** Extraia a data/referência, o tipo (Fatura/Refatura/NORMAL), o valor numérico de `Consumo (Kwh)` e, no campo de observações, inclua SEMPRE o status de pagamento JUNTO com o valor cobrado em Reais (ex.: `Paga - R$ 111.11`, `Em aberto - R$ 222.22` ou `Período controvertido - Em aberto - R$ 333.33`).
+     b) **Linhas com consumo em branco ou zerado (ex: faturas substituídas ou zeradas):** NÃO ignore a linha. Preencha o consumo com `0` e registre o valor e pagamento na observação (ex.: `Paga - R$ 444.44`).
      c) **Faturas e Refaturas:** Mantenha ambas registradas caso ambas constem na tabela do processo.
      d) **DataLeitura:** Utilize a data no formato `DD/MM/AAAA` (usando a data de leitura, vencimento ou `01/MM/AAAA` a partir do mês de referência).
      e) **Ordenação:** Ordene as linhas cronologicamente (da mais antiga para a mais recente).
@@ -102,13 +102,13 @@ Após transcrever todas as linhas da tabela:
 1. **`consumo_medio_processo` e `consumo_medio_reclamado` (Ambas calculadas pelo Histórico de Consumo):**
    - Ambas as variáveis devem ser calculadas da mesma forma: buscando todo o histórico de consumo extraído e apurando a média aritmética dos meses com medição efetiva (kWh).
    - Some os valores de consumo (em kWh) maiores que zero de todas as faturas/medições encontradas no histórico e divida pela quantidade de meses medidos.
-   - Preencha o mesmo valor inteiro calculado em ambas as variáveis (ex.: se a média apurada do histórico for 199 kWh, preencha `"199"` em `consumo_medio_processo` e `"199"` em `consumo_medio_reclamado`).
+   - Preencha o mesmo valor inteiro calculado em ambas as variáveis (ex.: se a média calculada do histórico for 111 kWh, preencha `"111"` em `consumo_medio_processo` e `"111"` em `consumo_medio_reclamado`).
    - *Nota Pericial:* A média pericial é calculada estritamente sobre a grandeza física em **kWh** (não sobre o valor em R$), conforme normas da ANEEL e requisitos do LaTeX.
    - Se não houver dados de faturas nos autos, preencha `""` em ambas.
 
 2. **`historico_consumo_inicio` e `historico_consumo_fim`:**
-   - `historico_consumo_inicio`: Data/Mês da 1ª linha do histórico (ex: `01/07/2023`).
-   - `historico_consumo_fim`: Data/Mês da última linha do histórico (ex: `01/02/2024`).
+   - `historico_consumo_inicio`: Data/Mês da 1ª linha do histórico (ex: `01/01/2023`).
+   - `historico_consumo_fim`: Data/Mês da última linha do histórico (ex: `01/12/2023`).
 
 3. **Formato do CSV (`historico_consumo_csv`):**
    - Formate todas as linhas como `DataLeitura,ModoFat,Consumo,Observacoes`.
@@ -116,17 +116,17 @@ Após transcrever todas as linhas da tabela:
    - *Exemplo de CSV integral (com valores monetários em todas as observações):*
      ```csv
      DataLeitura,ModoFat,Consumo,Observacoes
-     01/07/2023,Fatura,143,Paga - R$ 173.61
-     01/08/2023,Fatura,148,Paga - R$ 234.34
-     01/09/2023,Fatura,171,Paga - R$ 266.42
-     01/10/2023,Fatura,173,Paga - R$ 268.39
-     01/11/2023,Fatura,167,Paga - R$ 260.02
-     01/11/2023,Fatura,0,R$ 0.00
-     01/12/2023,Fatura,360,Período controvertido - Em aberto - R$ 516.74
-     01/01/2024,Fatura,0,Paga - R$ 531.45
-     01/01/2024,Refatura,233,Período controvertido - Paga - R$ 344.91
-     01/02/2024,Fatura,199,Em aberto - R$ 307.09
-     MÉDIA,,199,
+     01/01/2023,Fatura,111,Paga - R$ 111.11
+     01/02/2023,Fatura,222,Paga - R$ 222.22
+     01/03/2023,Fatura,333,Paga - R$ 333.33
+     01/04/2023,Fatura,444,Paga - R$ 444.44
+     01/05/2023,Fatura,111,Paga - R$ 111.11
+     01/06/2023,Fatura,0,R$ 0.00
+     01/07/2023,Fatura,333,Período controvertido - Em aberto - R$ 555.55
+     01/08/2023,Fatura,0,Paga - R$ 666.66
+     01/09/2023,Refatura,222,Período controvertido - Paga - R$ 444.44
+     01/10/2023,Fatura,111,Em aberto - R$ 222.22
+     MÉDIA,,111,
      ```
 
 ---
@@ -135,31 +135,31 @@ Após transcrever todas as linhas da tabela:
 
 ```json
 {
-  "data_vistoria": "Data agendada da vistoria no formato DD/MM/AAAA (ex: 15/09/2024), ou \"\" se ainda não agendada",
+  "data_vistoria": "Data agendada da vistoria no formato DD/MM/AAAA (ex: 11/11/2024), ou \"\" se ainda não agendada",
   "tipo_acao": "Consumo ou TOI",
-  "numero_processo": "Apenas dígitos (ex: 08043193920238190075)",
-  "numero_processo_formatado": "Formato CNJ (ex: 0804319-39.2023.8.19.0075)",
+  "numero_processo": "Apenas dígitos (ex: 11111111120248190001)",
+  "numero_processo_formatado": "Formato CNJ (ex: 1111111-11.2024.8.19.0001)",
   "nome_autor": "Nome completo do Autor(a)",
   "nome_reu": "Nome completo da Concessionária Ré",
-  "vara_juizo": "Vara Cível e Comarca (ex: 1ª Vara Cível da Comarca de Magé)",
-  "numero_cliente": "Código do cliente / instalação",
-  "numero_toi": "Número do TOI ou \"\"",
-  "data_lavratura_toi": "DD/MM/AAAA ou \"\"",
+  "vara_juizo": "Vara Cível e Comarca (ex: 1ª Vara Cível da Comarca de [CIDADE])",
+  "numero_cliente": "Código do cliente / instalação (ex: 11111111)",
+  "numero_toi": "Número do TOI (ex: 22222222) ou \"\"",
+  "data_lavratura_toi": "DD/MM/AAAA (ex: 11/11/1111) ou \"\"",
   "irregularidade_alegada_toi": "Descrição da irregularidade apontada pela ré ou \"\"",
-  "valor_recuperacao_cobrado": "Valor numérico em R$ (ex: 405.30) ou \"\"",
+  "valor_recuperacao_cobrado": "Valor numérico em R$ (ex: 999.99) ou \"\"",
   "endereco_pericia": "Endereço completo do imóvel periciado",
   "objetivo_pericia": "Objeto técnico fixado pelo Juízo no saneador",
   "resumo_processo": "Resumo neutro e conciso da lide",
   "alegacoes_autor": "Tópicos separados por \\\\",
   "contestacoes_reu": "Tópicos separados por \\\\",
-  "reducao_mes_inicio": "Mês inicial numérico (ex: 12) ou \"\"",
+  "reducao_mes_inicio": "Mês inicial numérico (ex: 11) ou \"\"",
   "reducao_ano_inicio": "Ano inicial numérico (ex: 2023) ou \"\"",
-  "reducao_mes_fim": "Mês final numérico (ex: 1) ou \"\"",
-  "reducao_ano_fim": "Ano final numérico (ex: 2024) ou \"\"",
-  "consumo_medio_processo": "Média aritmética do histórico de consumo em kWh (ex: 199)",
-  "consumo_medio_reclamado": "Média aritmética do histórico de consumo em kWh (mesmo valor apurado do histórico, ex: 199)",
-  "historico_consumo_inicio": "DD/MM/AAAA da primeira linha (ex: 01/07/2023)",
-  "historico_consumo_fim": "DD/MM/AAAA da última linha (ex: 01/02/2024)",
+  "reducao_mes_fim": "Mês final numérico (ex: 12) ou \"\"",
+  "reducao_ano_fim": "Ano final numérico (ex: 2023) ou \"\"",
+  "consumo_medio_processo": "Média aritmética do histórico de consumo em kWh (ex: 111)",
+  "consumo_medio_reclamado": "Média aritmética do histórico de consumo em kWh (mesmo valor apurado do histórico, ex: 111)",
+  "historico_consumo_inicio": "DD/MM/AAAA da primeira linha (ex: 01/01/2023)",
+  "historico_consumo_fim": "DD/MM/AAAA da última linha (ex: 01/12/2023)",
   "historico_consumo_csv": "DataLeitura,ModoFat,Consumo,Observacoes\n...",
   "quesitos_juizo_bruto": "Texto integral dos quesitos do Juízo",
   "quesitos_autor_bruto": "Texto integral dos quesitos do Autor",
