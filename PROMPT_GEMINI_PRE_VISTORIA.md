@@ -68,15 +68,17 @@ Antes de inserir ou atualizar a linha do processo na aba `[NOME_DA_ABA]`, você 
 
 1. **Fidelidade Absoluta:** Nunca deduza ou invente dados. Se um campo não constar nos autos, preencha com string vazia `""` (ou deixe a célula em branco).
 
-2. **Localização Prioritária pelo Sumário / Marcadores do PDF:**
-   - Inspecione o índice/sumário ou marcadores do PDF e localize seções com os títulos:
+2. **Ordem de Prioridade para Localização do Histórico de Consumo:**
+   A localização das tabelas/faturas varia entre os processos judiciais. Você deve seguir **obrigatoriamente a seguinte ordem sequencial de busca e prioridade**:
+   - **1ª Prioridade — Petição Inicial:** Inspecione os fatos e documentos anexados à Petição Inicial da parte autora (faturas, tabelas e extratos de contas juntados no início dos autos).
+   - **2ª Prioridade — Seções de Histórico de Consumo / Faturamento:** Inspecione marcadores, sumário ou contestação da ré buscando seções com os títulos:
      - `"Histórico de Consumo"`
      - `"Histórico de Faturamento"`
      - `"Extrato de Consumo / Faturamento"`
      - `"Demonstrativo de Faturamento e Pagamentos"`
      - `"Evolução de Consumo"`
      - `"Contas / Faturas Anexadas"`
-   - Vá diretamente até essas seções nos autos (muito frequentes na contestação da concessionária ré ou petição inicial).
+   - **3ª Prioridade — Documentos após a Decisão do Juiz mais recente nomeando a Fabíola como Perita:** Inspecione manifestações e faturas atualizadas juntadas aos autos logo após o despacho/decisão saneadora que nomeou a perita Fabíola Rodrigues Costa.
 
 3. **Transcrição Integral de Tabelas e Extratos (SEM IGNORAR NENHUMA LINHA):**
    - Transcreva **TODAS as linhas da tabela de faturamento exatamente como constam nos autos**, preservando a íntegra documental do processo judicial.
