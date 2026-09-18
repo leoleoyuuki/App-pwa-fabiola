@@ -123,7 +123,7 @@ Após transcrever todas as linhas da tabela:
      01/05/2023,Fatura,111,Paga - R$ 111.11
      01/06/2023,Fatura,0,R$ 0.00
      01/07/2023,Fatura,333,Período controvertido - Em aberto - R$ 555.55
-     01/08/2023,Fatura,0,Paga - R$ 666.66
+     01/08/2023,Fatura,0,Paga - R$ 777.77
      01/09/2023,Refatura,222,Período controvertido - Paga - R$ 444.44
      01/10/2023,Fatura,111,Em aberto - R$ 222.22
      MÉDIA,,111,
