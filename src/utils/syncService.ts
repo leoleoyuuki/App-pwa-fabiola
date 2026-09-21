@@ -21,10 +21,10 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 /**
- * Converts a Blob file to an optimized high-resolution JPEG Base64 string for Google Drive (max 1920px, ~450KB).
+ * Converts a Blob file to an optimized high-resolution JPEG Base64 string for Google Drive (max 1440px, ~160KB).
  * Preserves high forensic clarity while keeping the mobile network payload lightweight and reliable.
  */
-export function compressImageForDrive(blob: Blob, maxWidth = 1920, maxHeight = 1920, quality = 0.82): Promise<string> {
+export function compressImageForDrive(blob: Blob, maxWidth = 1440, maxHeight = 1440, quality = 0.72): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -72,9 +72,9 @@ export function compressImageForDrive(blob: Blob, maxWidth = 1920, maxHeight = 1
 }
 
 /**
- * Converts a Blob file to an optimized JPEG Base64 string for PDF printing (max 900px, ~70KB).
+ * Converts a Blob file to an optimized JPEG Base64 string for PDF printing (max 720px, ~40KB).
  */
-export function resizeImageForPdf(blob: Blob, maxWidth = 900, maxHeight = 900): Promise<string> {
+export function resizeImageForPdf(blob: Blob, maxWidth = 720, maxHeight = 720, quality = 0.60): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -106,7 +106,7 @@ export function resizeImageForPdf(blob: Blob, maxWidth = 900, maxHeight = 900): 
         }
 
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
         resolve(dataUrl);
       };
       img.onerror = () => resolve(event.target?.result as string);

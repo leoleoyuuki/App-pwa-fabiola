@@ -349,7 +349,7 @@ function doPost(e) {
           tipoAcao: data.tipoAcao || "Consumo"
         }, dadosPreVistoria || {});
 
-        var dadosVistoria = {
+        var dadosVistoriaSemFotos = {
           dataVistoria: data.dataVistoria || "",
           numeroVistoria: data.numeroVistoria || "1",
           periodoVistoria: data.periodoVistoria || "",
@@ -374,9 +374,7 @@ function doPost(e) {
           representacaoAutor: data.representacaoAutor || "Presente",
           representacaoReu: data.representacaoReu || "Ausente",
           observacoesPresenca: data.observacoesPresenca || "",
-          observacoesFinais: data.observacoesFinais || "",
-          photosImovel: data.photosImovel || [],
-          photosMedidor: data.photosMedidor || []
+          observacoesFinais: data.observacoesFinais || ""
         };
 
         // --- ETAPA 1: IA Gemini redige as respostas e prepara arquivos .TeX / .CSV (~6 a 12s) ---
@@ -403,7 +401,7 @@ function doPost(e) {
               var rJ = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
                 method: "post",
                 contentType: "application/json",
-                payload: JSON.stringify({ processo: dadosProcesso, vistoria: dadosVistoria, parte: "juizo" }),
+                payload: JSON.stringify({ processo: dadosProcesso, vistoria: dadosVistoriaSemFotos, parte: "juizo" }),
                 muteHttpExceptions: true
               });
               var jJ = JSON.parse(rJ.getContentText());
@@ -421,7 +419,7 @@ function doPost(e) {
               var rA = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
                 method: "post",
                 contentType: "application/json",
-                payload: JSON.stringify({ processo: dadosProcesso, vistoria: dadosVistoria, parte: "autor" }),
+                payload: JSON.stringify({ processo: dadosProcesso, vistoria: dadosVistoriaSemFotos, parte: "autor" }),
                 muteHttpExceptions: true
               });
               var jA = JSON.parse(rA.getContentText());
@@ -439,7 +437,7 @@ function doPost(e) {
               var rR = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
                 method: "post",
                 contentType: "application/json",
-                payload: JSON.stringify({ processo: dadosProcesso, vistoria: dadosVistoria, parte: "reu" }),
+                payload: JSON.stringify({ processo: dadosProcesso, vistoria: dadosVistoriaSemFotos, parte: "reu" }),
                 muteHttpExceptions: true
               });
               var jR = JSON.parse(rR.getContentText());
@@ -453,7 +451,7 @@ function doPost(e) {
             // Processo com volume normal: requisição única
             var payloadQuesitos = {
               processo: dadosProcesso,
-              vistoria: dadosVistoria,
+              vistoria: dadosVistoriaSemFotos,
               parte: "tudo"
             };
             var respQuesitosHttp = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
@@ -472,7 +470,23 @@ function doPost(e) {
         }
 
         // --- ETAPA 2: Compilação do PDF Oficial com Tectonic XeTeX (~12 a 25s) ---
-        var payloadCompilacao = Object.assign({}, dadosProcesso, dadosVistoria, {
+        // Prepara fotos ultraleves para compilação do PDF (apenas pdfBase64, removendo o base64 pesado de 1440px)
+        var photosImovelCompact = (data.photosImovel || []).map(function(p) {
+          return {
+            name: p.name || "foto_imovel.jpg",
+            base64: p.pdfBase64 || p.base64 || ""
+          };
+        });
+        var photosMedidorCompact = (data.photosMedidor || []).map(function(p) {
+          return {
+            name: p.name || "foto_medidor.jpg",
+            base64: p.pdfBase64 || p.base64 || ""
+          };
+        });
+
+        var payloadCompilacao = Object.assign({}, dadosProcesso, dadosVistoriaSemFotos, {
+          photosImovel: photosImovelCompact,
+          photosMedidor: photosMedidorCompact,
           quesitosDoJuizo: respostasQuesitos.quesitosDoJuizo || respostasQuesitos.quesitos_juizo,
           quesitosDoAutor: respostasQuesitos.quesitosDoAutor || respostasQuesitos.quesitos_autor,
           quesitosDoReu: respostasQuesitos.quesitosDoReu || respostasQuesitos.quesitos_reu,
