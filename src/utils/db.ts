@@ -80,6 +80,7 @@ export interface HistoryItem {
   projectAddress: string;
   inspectorName: string;
   photoCount: number;
+  fullData?: InspectionData;
 }
 
 export const db = {
@@ -173,6 +174,8 @@ export const db = {
   // --- Sync Queue (Pending Uploads) ---
   async addToQueue(inspection: InspectionData): Promise<void> {
     await queueStore.setItem(inspection.id, inspection);
+    // Também salva cópia preventiva no histórico para permitir retomada imediata
+    await this.addToHistory(inspection);
   },
 
   async getQueue(peritoEmail?: string): Promise<InspectionData[]> {
@@ -194,7 +197,7 @@ export const db = {
     await queueStore.removeItem(id);
   },
 
-  // --- Sync History (Metadata only to save device space) ---
+  // --- Sync History (Com persistência dos dados para Retomar Vistoria) ---
   async addToHistory(inspection: InspectionData): Promise<void> {
     const historyItem: HistoryItem = {
       id: inspection.id,
@@ -204,7 +207,8 @@ export const db = {
       clientName: inspection.nomeAutor,
       projectAddress: inspection.numeroProcesso || 'S/N',
       inspectorName: inspection.tipoAcao,
-      photoCount: inspection.photosImovel.length + inspection.photosMedidor.length
+      photoCount: (inspection.photosImovel?.length || 0) + (inspection.photosMedidor?.length || 0),
+      fullData: inspection
     };
     await historyStore.setItem(inspection.id, historyItem);
   },
@@ -221,7 +225,11 @@ export const db = {
       }
     }
     // Sort newest first
-    return items.sort((a, b) => new Date(b.syncedAt).getTime() - new Date(a.syncedAt).getTime());
+    return items.sort((a, b) => new Date(b.syncedAt || b.createdAt).getTime() - new Date(a.syncedAt || a.createdAt).getTime());
+  },
+
+  async getHistoryItemById(id: string): Promise<HistoryItem | null> {
+    return await historyStore.getItem<HistoryItem>(id);
   },
 
   // --- Cached Cloud Records from Google Sheets ---

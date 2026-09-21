@@ -119,41 +119,68 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
   const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Manipulador para Retomar Vistoria (Edição)
-  const handleResumeInspection = (rec: any) => {
+  const handleResumeInspection = async (rec: any) => {
     if (!rec) return;
+
+    // Tenta recuperar cópia completa salva localmente no histórico
+    let photosImovel: any[] = [];
+    let photosMedidor: any[] = [];
+    let extraData: any = {};
+
+    try {
+      const historyItems = await db.getHistory(userEmail);
+      const procLimpo = (rec.NúmerodoProcesso || '').replace(/\D/g, '');
+      const autorLimpo = (rec.NomedoAutor || '').trim().toLowerCase();
+
+      const match = historyItems.find(h => {
+        if (!h.fullData) return false;
+        const hProc = (h.fullData.numeroProcesso || '').replace(/\D/g, '');
+        const hAutor = (h.fullData.nomeAutor || '').trim().toLowerCase();
+        return (procLimpo && hProc && procLimpo === hProc) || (autorLimpo && hAutor && autorLimpo === hAutor);
+      });
+
+      if (match && match.fullData) {
+        extraData = match.fullData;
+        photosImovel = match.fullData.photosImovel || [];
+        photosMedidor = match.fullData.photosMedidor || [];
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar histórico local para retomar vistoria:', e);
+    }
+
     const draft: DraftData = {
       id: 'draft_resume_' + Date.now(),
-      nomeAutor: rec.NomedoAutor || '',
-      numeroProcesso: rec.NúmerodoProcesso || '',
-      reuConcessionaria: rec['Réu/Concessionária'] || rec.RéuConcessionária || '',
-      tipoAcao: rec.TipodeAção || 'Consumo',
-      dataVistoria: normalizeToYMD(rec.DatadaVistoria) || rec.DatadaVistoria || '',
-      numeroVistoria: rec.NºdaVistoria || '1',
-      periodoVistoria: rec.PeríododaVistoria || 'Manhã 09 - 12 h',
-      representacaoAutor: rec['RepresentaçãoAutorPresente?'] || rec.RepresentaçãoAutorPresente || 'Sim',
-      representacaoReu: rec['RepresentaçãoRéuPresente?'] || rec.RepresentaçãoRéuPresente || 'Sim',
-      observacoesPresenca: rec['Obs.PresençadasPartes'] || '',
-      numeroMedidor: rec.NúmerodoMedidor || '',
-      medidorChip: rec['MedidorcomChip?'] || rec.MedidorcomChip || 'Não',
-      condicoesMedidor: rec.CondiçõesdoMedidor || 'Boa (Lacrado)',
-      corteEnergia: rec.CortedeEnergia || 'Não',
-      notificacaoPreviaCorte: rec.NotificacaoPreviaCorte || 'Não',
-      observacoesMedidor: '',
-      qtdPessoas: rec.PessoasResidentes || '1',
-      qtdComodos: rec.QuantidadedeCômodos || '1',
-      numLampadas: rec.NºdeLâmpadas || '',
-      numTvs: rec.NºdeTVs || '0',
-      numVentiladores: rec.NºdeVentiladores || '0',
-      numVentiladoresTeto: rec.NºdeVentiladoresdeTeto || '0',
-      numArCondicionados: rec.NºdeArCondicionados || '0',
-      numGeladeiras: rec.NºdeGeladeiras || '0',
-      numChuveiros: rec.NºdeChuveirosElétricos || '0',
-      numMaquinasLavar: rec.NºdeMáquinasdeLavar || '0',
-      numFreezers: rec.NºdeFreezers || '0',
-      checklist: rec.ChecklistTécnico ? rec.ChecklistTécnico.split(',').map((s: string) => s.trim()) : [],
-      observacoesFinais: rec.ObservaçõesFinaisdoPerito || '',
-      photosImovel: [],
-      photosMedidor: [],
+      nomeAutor: rec.NomedoAutor || extraData.nomeAutor || '',
+      numeroProcesso: rec.NúmerodoProcesso || extraData.numeroProcesso || '',
+      reuConcessionaria: rec['Réu/Concessionária'] || rec.RéuConcessionária || extraData.reuConcessionaria || '',
+      tipoAcao: rec.TipodeAção || extraData.tipoAcao || 'Consumo',
+      dataVistoria: normalizeToYMD(rec.DatadaVistoria) || extraData.dataVistoria || rec.DatadaVistoria || '',
+      numeroVistoria: rec.NºdaVistoria || extraData.numeroVistoria || '1',
+      periodoVistoria: rec.PeríododaVistoria || extraData.periodoVistoria || 'Manhã 09 - 12 h',
+      representacaoAutor: rec['RepresentaçãoAutorPresente?'] || rec.RepresentaçãoAutorPresente || extraData.representacaoAutor || 'Sim',
+      representacaoReu: rec['RepresentaçãoRéuPresente?'] || rec.RepresentaçãoRéuPresente || extraData.representacaoReu || 'Sim',
+      observacoesPresenca: rec['Obs.PresençadasPartes'] || extraData.observacoesPresenca || '',
+      numeroMedidor: rec.NúmerodoMedidor || extraData.numeroMedidor || '',
+      medidorChip: rec['MedidorcomChip?'] || rec.MedidorcomChip || extraData.medidorChip || 'Não',
+      condicoesMedidor: rec.CondiçõesdoMedidor || extraData.condicoesMedidor || 'Boa (Lacrado)',
+      corteEnergia: rec.CortedeEnergia || extraData.corteEnergia || 'Não',
+      notificacaoPreviaCorte: rec.NotificacaoPreviaCorte || extraData.notificacaoPreviaCorte || 'Não',
+      observacoesMedidor: extraData.observacoesMedidor || '',
+      qtdPessoas: rec.PessoasResidentes || extraData.qtdPessoas || '1',
+      qtdComodos: rec.QuantidadedeCômodos || extraData.qtdComodos || '1',
+      numLampadas: rec.NºdeLâmpadas || extraData.numLampadas || '',
+      numTvs: rec.NºdeTVs || extraData.numTvs || '0',
+      numVentiladores: rec.NºdeVentiladores || extraData.numVentiladores || '0',
+      numVentiladoresTeto: rec.NºdeVentiladoresdeTeto || extraData.numVentiladoresTeto || '0',
+      numArCondicionados: rec.NºdeArCondicionados || extraData.numArCondicionados || '0',
+      numGeladeiras: rec.NºdeGeladeiras || extraData.numGeladeiras || '0',
+      numChuveiros: rec.NºdeChuveirosElétricos || extraData.numChuveiros || '0',
+      numMaquinasLavar: rec.NºdeMáquinasdeLavar || extraData.numMaquinasLavar || '0',
+      numFreezers: rec.NºdeFreezers || extraData.numFreezers || '0',
+      checklist: rec.ChecklistTécnico ? rec.ChecklistTécnico.split(',').map((s: string) => s.trim()) : (extraData.checklist || []),
+      observacoesFinais: rec.ObservaçõesFinaisdoPerito || extraData.observacoesFinais || '',
+      photosImovel: photosImovel,
+      photosMedidor: photosMedidor,
       updatedAt: new Date().toISOString()
     };
 
@@ -584,14 +611,15 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
                 display: 'flex', 
                 justifyContent: 'space-between', 
                 alignItems: 'center', 
-                cursor: 'pointer' 
+                cursor: 'pointer',
+                gap: '12px'
               }}
             >
-              <div style={{ paddingRight: '12px', flexGrow: 1 }}>
-                <h4 style={{ fontSize: '1.05rem', fontFamily: 'var(--font-serif)', marginBottom: '4px' }}>
+              <div style={{ flexGrow: 1, minWidth: 0 }}>
+                <h4 style={{ fontSize: '1.05rem', fontFamily: 'var(--font-serif)', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {rec.NomedoAutor || 'Autor sem nome'}
                 </h4>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-primary)', marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   Proc: {rec.NúmerodoProcesso || 'Não especificado'}
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
@@ -602,7 +630,33 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
                   <span>⚡ {rec.TipodeAção || 'Consumo'}</span>
                 </div>
               </div>
-              <ChevronRight size={18} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleResumeInspection(rec);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '8px 10px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    backgroundColor: 'var(--accent-gold-light)',
+                    border: '1px solid var(--accent-gold)',
+                    color: 'var(--accent-gold-hover)',
+                    borderRadius: 'var(--radius-xs)',
+                    cursor: 'pointer'
+                  }}
+                  title="Retomar e reenviar esta vistoria"
+                >
+                  <FileEdit size={14} />
+                  Retomar
+                </button>
+                <ChevronRight size={18} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
+              </div>
             </div>
           ))
         )}

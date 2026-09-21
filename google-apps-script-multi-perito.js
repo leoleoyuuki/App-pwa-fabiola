@@ -238,9 +238,9 @@ function doPost(e) {
     var nomeAutorOriginal = data.nomeAutor || "Autor Sem Nome";
     var nomeAutor = capitalizarNome(nomeAutorOriginal);
     
-    // 🛡️ CAMADA 1: PREVENÇÃO CONTRA DUPLO CLIQUE ACIDENTAL (20 segundos)
+    // 🛡️ CAMADA 1: PREVENÇÃO CONTRA DUPLO CLIQUE ACIDENTAL (5 segundos por ID único de requisição)
     var cache = CacheService.getScriptCache();
-    var idInspecao = data.id ? String(data.id) : (nomeAutor + "_" + (data.numeroProcesso || "") + "_" + (data.dataVistoria || ""));
+    var idInspecao = data.id ? String(data.id) : (nomeAutor + "_" + (data.numeroProcesso || "") + "_" + (data.dataVistoria || "") + "_" + (data.numeroVistoria || "1") + "_" + Date.now());
     var cacheKey = "proc_" + idInspecao.replace(/[^a-zA-Z0-9_]/g, "");
 
     if (cache.get(cacheKey) === "processando") {
@@ -251,9 +251,9 @@ function doPost(e) {
         duplicatePrevented: true
       })).setMimeType(ContentService.MimeType.JSON);
     }
-    cache.put(cacheKey, "processando", 20);
+    cache.put(cacheKey, "processando", 5);
     
-    // 1. Cria nova pasta no Google Drive do Perito com versionamento (NÃO sobrescreve nem apaga vistorias anteriores)
+    // 1. Cria nova pasta no Google Drive do Perito com versionamento, data e número da vistoria
     var mainFolder = DriveApp.getFolderById(mainFolderId);
     
     var dataVistoriaFormatada = "";
@@ -266,13 +266,32 @@ function doPost(e) {
       }
     }
     
-    var pastaVistoriaNome = dataVistoriaFormatada ? (dataVistoriaFormatada + " - " + nomeAutor) : nomeAutor;
+    var numVistoriaStr = (data.numeroVistoria && String(data.numeroVistoria) !== "1") ? (" - Vistoria " + data.numeroVistoria) : "";
+    var pastaVistoriaNome = dataVistoriaFormatada ? (dataVistoriaFormatada + " - " + nomeAutor + numVistoriaStr) : (nomeAutor + numVistoriaStr);
     var inspectionFolder = criarPastaVistoriaComVersionamento(mainFolder, pastaVistoriaNome);
     
     var subfolderImovel = criarOuObterPasta(inspectionFolder, "Fotos da Residência");
     var subfolderMedidor = criarOuObterPasta(inspectionFolder, "Fotos do Medidor");
     
-    // 2. Salva Fotografias em Base64
+    // 2. Gravação IMEDIATA na Planilha de Vistorias na aba "Energia" (Garantida no início)
+    var mapaAbas = {
+      "energia": "Energia",
+      "agua": "Água",
+      "imobiliario": "Imobiliário",
+      "gas": "Gás"
+    };
+    
+    var nomeAba = mapaAbas[tipo] || "Energia";
+    var sheet = buscarAbaFlexivel(ss, nomeAba);
+    if (!sheet) {
+      sheet = ss.insertSheet(nomeAba);
+    }
+    
+    // Gravação 100% DINÂMICA na planilha e flush imediato
+    var linhaGravadaIndex = gravarLinhaVistoriaDinamica(sheet, data, nomeAutor, inspectionFolder.getUrl(), "");
+    SpreadsheetApp.flush();
+
+    // 3. Salva Fotografias em Base64 na pasta do Google Drive
     var urlsFotosImovel = [];
     if (data.photosImovel && Array.isArray(data.photosImovel) && data.photosImovel.length > 0) {
       urlsFotosImovel = salvarFotosBase64(data.photosImovel, subfolderImovel, "Imovel_");
@@ -289,30 +308,6 @@ function doPost(e) {
     if ((urlsFotosImovel.length === 0 && urlsFotosMedidor.length === 0) && pastaOrigemUrl) {
       copiarFotosDaPastaOrigem(pastaOrigemUrl, subfolderImovel, subfolderMedidor, data);
     }
-    
-    // 3. Gravação na Planilha de Vistorias na aba "Energia" (Relatórios)
-    var mapaAbas = {
-      "energia": "Energia",
-      "agua": "Água",
-      "imobiliario": "Imobiliário",
-      "gas": "Gás"
-    };
-    
-    var nomeAba = mapaAbas[tipo] || "Energia";
-    var sheet = buscarAbaFlexivel(ss, nomeAba);
-    if (!sheet) {
-      sheet = ss.insertSheet(nomeAba);
-    }
-    
-    // 🛡️ CAMADA 2: IDENTIFICAÇÃO DE VISTORIA REPETIDA / REENVIADA
-    // Se o processo já existir, NÃO bloqueia o microserviço: gera nova linha, nova pasta e novo Laudo Oficial!
-    var ehReenvio = isRegistroDuplicado(sheet, data.numeroProcesso, nomeAutor, data.dataVistoria);
-    if (ehReenvio) {
-      console.log("ℹ️ Vistoria repetida/reenviada detectada para o processo " + data.numeroProcesso + ". Gerando nova pasta isolada e novo Laudo no microserviço.");
-    }
-    
-    // Gravação 100% DINÂMICA na planilha
-    var linhaGravadaIndex = gravarLinhaVistoriaDinamica(sheet, data, nomeAutor, inspectionFolder.getUrl(), "");
 
     // 4. Integração Pré-Vistoria: Lê estritamente de "Processos Energia"
     var urlLaudoGerado = "";
@@ -327,9 +322,10 @@ function doPost(e) {
     
     var dadosPreVistoria = null;
     var linhaProcessoEncontrada = -1;
+    var extraido = null;
     
     if (sheetProcessosRef) {
-      var extraido = extrairDadosPreVistoriaDinamico(sheetProcessosRef, data.numeroProcesso, nomeAutor);
+      extraido = extrairDadosPreVistoriaDinamico(sheetProcessosRef, data.numeroProcesso, nomeAutor, data.dataVistoria);
       if (extraido) {
         dadosPreVistoria = extraido.dados;
         linhaProcessoEncontrada = extraido.linhaIndex;
@@ -729,7 +725,7 @@ function acharIndiceColuna(headersArray, aliases) {
 /**
  * Extrai dados da aba "Processos Energia" dinamicamente pelas 26 colunas oficiais
  */
-function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, nomeAutorBuscado) {
+function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, nomeAutorBuscado, dataVistoriaBuscada) {
   var dataRange = sheetProcessos.getDataRange().getDisplayValues();
   if (dataRange.length <= 1) return null;
 
@@ -772,6 +768,7 @@ function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, 
 
   var procBuscadoLimpo = numeroProcessoBuscado ? numeroProcessoBuscado.toString().replace(/[^0-9]/g, "") : "";
   var autorBuscadoLimpo = nomeAutorBuscado ? nomeAutorBuscado.toString().toLowerCase().trim() : "";
+  var dataBuscadaLimpa = dataVistoriaBuscada ? dataVistoriaBuscada.toString().trim() : "";
 
   var rowTarget = null;
   var linhaEncontradaIndex = -1;
@@ -780,17 +777,24 @@ function extrairDadosPreVistoriaDinamico(sheetProcessos, numeroProcessoBuscado, 
     var r = dataRange[i];
     var pVal = colProc >= 0 ? String(r[colProc] || "").replace(/[^0-9]/g, "") : "";
     var aVal = colAutor >= 0 ? String(r[colAutor] || "").toLowerCase().trim() : "";
+    var dVal = colData >= 0 ? String(r[colData] || "").trim() : "";
 
+    // Se processo e data baterem exatamente, dá prioridade máxima
     if (procBuscadoLimpo && pVal && pVal === procBuscadoLimpo) {
-      rowTarget = r;
-      linhaEncontradaIndex = i + 1;
-      break;
-    }
-
-    if (autorBuscadoLimpo && aVal && (aVal === autorBuscadoLimpo || aVal.indexOf(autorBuscadoLimpo) !== -1 || autorBuscadoLimpo.indexOf(aVal) !== -1)) {
-      rowTarget = r;
-      linhaEncontradaIndex = i + 1;
-      break;
+      if (dataBuscadaLimpa && dVal && (dVal.indexOf(dataBuscadaLimpa) !== -1 || dataBuscadaLimpa.indexOf(dVal) !== -1)) {
+        rowTarget = r;
+        linhaEncontradaIndex = i + 1;
+        break;
+      }
+      if (!rowTarget) {
+        rowTarget = r;
+        linhaEncontradaIndex = i + 1;
+      }
+    } else if (autorBuscadoLimpo && aVal && (aVal === autorBuscadoLimpo || aVal.indexOf(autorBuscadoLimpo) !== -1 || autorBuscadoLimpo.indexOf(aVal) !== -1)) {
+      if (!rowTarget) {
+        rowTarget = r;
+        linhaEncontradaIndex = i + 1;
+      }
     }
   }
 
@@ -847,16 +851,16 @@ function criarPastaVistoriaComVersionamento(parentFolder, baseName) {
     return parentFolder.createFolder(baseName);
   }
   // Se a pasta já existir (reenvio/vistoria repetida), cria uma NOVA pasta numerada
-  // garantindo que os arquivos da vistoria anterior NUNCA sejam apagados ou sobrescritos
   var count = 2;
-  while (true) {
-    var nomeVersao = baseName + " (Vistoria " + count + ")";
+  while (count <= 50) {
+    var nomeVersao = baseName + " (Versão " + count + ")";
     var busca = parentFolder.getFoldersByName(nomeVersao);
     if (!busca.hasNext()) {
       return parentFolder.createFolder(nomeVersao);
     }
     count++;
   }
+  return parentFolder.createFolder(baseName + " (" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "HHmmss") + ")");
 }
 
 function salvarFotosBase64(photosArray, targetFolder, prefixo) {
