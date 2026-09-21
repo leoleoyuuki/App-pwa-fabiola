@@ -21,10 +21,10 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 /**
- * Converts a Blob file to an optimized high-resolution JPEG Base64 string for Google Drive (max 1440px, ~160KB).
- * Preserves high forensic clarity while keeping the mobile network payload lightweight and reliable.
+ * Converts a Blob file to an optimized JPEG Base64 string for Google Drive (max 1280px, ~90-110KB).
+ * Preserves high forensic clarity while keeping the mobile network payload ultra-lightweight.
  */
-export function compressImageForDrive(blob: Blob, maxWidth = 1440, maxHeight = 1440, quality = 0.72): Promise<string> {
+export function compressImageForDrive(blob: Blob, maxWidth = 1280, maxHeight = 1280, quality = 0.65): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -72,9 +72,9 @@ export function compressImageForDrive(blob: Blob, maxWidth = 1440, maxHeight = 1
 }
 
 /**
- * Converts a Blob file to an optimized JPEG Base64 string for PDF printing (max 720px, ~40KB).
+ * Converts a Blob file to an ultra-optimized JPEG Base64 string for LaTeX PDF printing (max 640px, ~20-25KB).
  */
-export function resizeImageForPdf(blob: Blob, maxWidth = 720, maxHeight = 720, quality = 0.60): Promise<string> {
+export function resizeImageForPdf(blob: Blob, maxWidth = 640, maxHeight = 640, quality = 0.50): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (event) => {

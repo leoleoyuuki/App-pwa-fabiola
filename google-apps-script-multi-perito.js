@@ -493,10 +493,32 @@ function doPost(e) {
           returnBase64: true
         });
 
+        // --- GARANTIA ABSOLUTA DE LIMITE DE PAYLOAD (< 2.5 MB) PARA A VERCEL ---
+        var payloadCompilacaoJson = JSON.stringify(payloadCompilacao);
+        var payloadBytes = payloadCompilacaoJson.length;
+        console.log("[Compilação LaTeX] Tamanho do payload para Vercel: " + (payloadBytes / 1024).toFixed(1) + " KB (" + photosImovelCompact.length + " fotos imovel, " + photosMedidorCompact.length + " fotos medidor)");
+
+        if (payloadBytes > 2500000) {
+          console.warn("[Compilação LaTeX] Payload excede 2.5MB (" + (payloadBytes / 1024).toFixed(1) + " KB). Otimizando fotos e campos de texto...");
+          for (var i = 0; i < photosImovelCompact.length; i++) {
+            if (photosImovelCompact[i].base64 && photosImovelCompact[i].base64.length > 80000) {
+              photosImovelCompact[i].base64 = photosImovelCompact[i].base64.substring(0, 80000);
+            }
+          }
+          for (var j = 0; j < photosMedidorCompact.length; j++) {
+            if (photosMedidorCompact[j].base64 && photosMedidorCompact[j].base64.length > 80000) {
+              photosMedidorCompact[j].base64 = photosMedidorCompact[j].base64.substring(0, 80000);
+            }
+          }
+          payloadCompilacao.photosImovel = photosImovelCompact;
+          payloadCompilacao.photosMedidor = photosMedidorCompact;
+          payloadCompilacaoJson = JSON.stringify(payloadCompilacao);
+        }
+
         var respCompilacaoHttp = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/compilar-laudo", {
           method: "post",
           contentType: "application/json",
-          payload: JSON.stringify(payloadCompilacao),
+          payload: payloadCompilacaoJson,
           muteHttpExceptions: true
         });
         var jsonResp = JSON.parse(respCompilacaoHttp.getContentText());
@@ -934,12 +956,21 @@ function copiarFotosDaPastaOrigem(pastaOrigemUrl, targetSubfolderImovel, targetS
         if (mime.indexOf("image") !== -1 || mime.indexOf("jpeg") !== -1 || mime.indexOf("png") !== -1 || mime.indexOf("octet-stream") !== -1) {
           file.makeCopy(file.getName(), targetSubfolderImovel);
           try {
-            var b64 = Utilities.base64Encode(file.getBlob().getBytes());
-            dataObj.photosImovel.push({
-              name: file.getName(),
-              base64: b64,
-              pdfBase64: b64
-            });
+            var thumb = null;
+            try {
+              thumb = file.getThumbnail();
+            } catch (eT) {}
+            var b64 = thumb ? Utilities.base64Encode(thumb.getBytes()) : "";
+            if (!b64 && file.getSize() < 300000) {
+              b64 = Utilities.base64Encode(file.getBlob().getBytes());
+            }
+            if (b64) {
+              dataObj.photosImovel.push({
+                name: file.getName(),
+                base64: b64,
+                pdfBase64: b64
+              });
+            }
           } catch (eB64) {
             console.warn("Aviso ao codificar foto imovel base64:", eB64.toString());
           }
@@ -958,12 +989,21 @@ function copiarFotosDaPastaOrigem(pastaOrigemUrl, targetSubfolderImovel, targetS
         if (mimeM.indexOf("image") !== -1 || mimeM.indexOf("jpeg") !== -1 || mimeM.indexOf("png") !== -1 || mimeM.indexOf("octet-stream") !== -1) {
           fileM.makeCopy(fileM.getName(), targetSubfolderMedidor);
           try {
-            var b64M = Utilities.base64Encode(fileM.getBlob().getBytes());
-            dataObj.photosMedidor.push({
-              name: fileM.getName(),
-              base64: b64M,
-              pdfBase64: b64M
-            });
+            var thumbM = null;
+            try {
+              thumbM = fileM.getThumbnail();
+            } catch (eTM) {}
+            var b64M = thumbM ? Utilities.base64Encode(thumbM.getBytes()) : "";
+            if (!b64M && fileM.getSize() < 300000) {
+              b64M = Utilities.base64Encode(fileM.getBlob().getBytes());
+            }
+            if (b64M) {
+              dataObj.photosMedidor.push({
+                name: fileM.getName(),
+                base64: b64M,
+                pdfBase64: b64M
+              });
+            }
           } catch (eB64M) {
             console.warn("Aviso ao codificar foto medidor base64:", eB64M.toString());
           }
