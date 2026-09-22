@@ -169,12 +169,7 @@ function doGet(e) {
                 var mime = file.getMimeType();
                 if (mime.indexOf("image") !== -1 || mime.indexOf("jpeg") !== -1 || mime.indexOf("png") !== -1 || mime.indexOf("octet-stream") !== -1) {
                   try {
-                    var thumb = null;
-                    try { thumb = file.getThumbnail(); } catch (eT) {}
-                    var b64 = thumb ? Utilities.base64Encode(thumb.getBytes()) : "";
-                    if (!b64 && file.getSize() < 300000) {
-                      b64 = Utilities.base64Encode(file.getBlob().getBytes());
-                    }
+                    var b64 = obterThumbnailUltraLeveBase64(file);
                     if (b64) {
                       result.photosImovel.push({
                         name: file.getName(),
@@ -195,12 +190,7 @@ function doGet(e) {
                 var mimeM = fileM.getMimeType();
                 if (mimeM.indexOf("image") !== -1 || mimeM.indexOf("jpeg") !== -1 || mimeM.indexOf("png") !== -1 || mimeM.indexOf("octet-stream") !== -1) {
                   try {
-                    var thumbM = null;
-                    try { thumbM = fileM.getThumbnail(); } catch (eTM) {}
-                    var b64M = thumbM ? Utilities.base64Encode(thumbM.getBytes()) : "";
-                    if (!b64M && fileM.getSize() < 300000) {
-                      b64M = Utilities.base64Encode(fileM.getBlob().getBytes());
-                    }
+                    var b64M = obterThumbnailUltraLeveBase64(fileM);
                     if (b64M) {
                       result.photosMedidor.push({
                         name: fileM.getName(),
@@ -987,6 +977,49 @@ function extrairFolderId(url) {
   return null;
 }
 
+function obterThumbnailUltraLeveBase64(file) {
+  if (!file) return "";
+  var fileId = file.getId();
+  
+  // 1. Tenta obter thumbnail nativo otimizado a 600px diretamente pelo CDN do Google Drive (~20-25 KB)
+  try {
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (eShare) {}
+    
+    var thumbUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w600";
+    var resp = UrlFetchApp.fetch(thumbUrl, { muteHttpExceptions: true });
+    if (resp.getResponseCode() === 200) {
+      var bytes = resp.getBlob().getBytes();
+      if (bytes && bytes.length > 500 && bytes.length < 250000) {
+        return Utilities.base64Encode(bytes);
+      }
+    }
+  } catch (eThumb) {
+    console.warn("Aviso ao buscar thumbnail 600px do Drive:", eThumb.toString());
+  }
+  
+  // 2. Fallback para getThumbnail nativo
+  try {
+    var thumbFallback = file.getThumbnail();
+    if (thumbFallback) {
+      var tBytes = thumbFallback.getBytes();
+      if (tBytes && tBytes.length < 400000) {
+        return Utilities.base64Encode(tBytes);
+      }
+    }
+  } catch (eF) {}
+
+  // 3. Fallback final para arquivo pequeno
+  try {
+    if (file.getSize() < 200000) {
+      return Utilities.base64Encode(file.getBlob().getBytes());
+    }
+  } catch (eSmall) {}
+  
+  return "";
+}
+
 function copiarFotosDaPastaOrigem(pastaOrigemUrl, targetSubfolderImovel, targetSubfolderMedidor, dataObj) {
   try {
     var folderId = extrairFolderId(pastaOrigemUrl);
@@ -1007,25 +1040,14 @@ function copiarFotosDaPastaOrigem(pastaOrigemUrl, targetSubfolderImovel, targetS
         var file = files.next();
         var mime = file.getMimeType();
         if (mime.indexOf("image") !== -1 || mime.indexOf("jpeg") !== -1 || mime.indexOf("png") !== -1 || mime.indexOf("octet-stream") !== -1) {
-          file.makeCopy(file.getName(), targetSubfolderImovel);
-          try {
-            var thumb = null;
-            try {
-              thumb = file.getThumbnail();
-            } catch (eT) {}
-            var b64 = thumb ? Utilities.base64Encode(thumb.getBytes()) : "";
-            if (!b64 && file.getSize() < 300000) {
-              b64 = Utilities.base64Encode(file.getBlob().getBytes());
-            }
-            if (b64) {
-              dataObj.photosImovel.push({
-                name: file.getName(),
-                base64: b64,
-                pdfBase64: b64
-              });
-            }
-          } catch (eB64) {
-            console.warn("Aviso ao codificar foto imovel base64:", eB64.toString());
+          var copiedFile = file.makeCopy(file.getName(), targetSubfolderImovel);
+          var b64 = obterThumbnailUltraLeveBase64(copiedFile || file);
+          if (b64) {
+            dataObj.photosImovel.push({
+              name: file.getName(),
+              base64: b64,
+              pdfBase64: b64
+            });
           }
         }
       }
@@ -1040,25 +1062,14 @@ function copiarFotosDaPastaOrigem(pastaOrigemUrl, targetSubfolderImovel, targetS
         var fileM = filesM.next();
         var mimeM = fileM.getMimeType();
         if (mimeM.indexOf("image") !== -1 || mimeM.indexOf("jpeg") !== -1 || mimeM.indexOf("png") !== -1 || mimeM.indexOf("octet-stream") !== -1) {
-          fileM.makeCopy(fileM.getName(), targetSubfolderMedidor);
-          try {
-            var thumbM = null;
-            try {
-              thumbM = fileM.getThumbnail();
-            } catch (eTM) {}
-            var b64M = thumbM ? Utilities.base64Encode(thumbM.getBytes()) : "";
-            if (!b64M && fileM.getSize() < 300000) {
-              b64M = Utilities.base64Encode(fileM.getBlob().getBytes());
-            }
-            if (b64M) {
-              dataObj.photosMedidor.push({
-                name: fileM.getName(),
-                base64: b64M,
-                pdfBase64: b64M
-              });
-            }
-          } catch (eB64M) {
-            console.warn("Aviso ao codificar foto medidor base64:", eB64M.toString());
+          var copiedFileM = fileM.makeCopy(fileM.getName(), targetSubfolderMedidor);
+          var b64M = obterThumbnailUltraLeveBase64(copiedFileM || fileM);
+          if (b64M) {
+            dataObj.photosMedidor.push({
+              name: fileM.getName(),
+              base64: b64M,
+              pdfBase64: b64M
+            });
           }
         }
       }

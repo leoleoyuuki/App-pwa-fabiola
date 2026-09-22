@@ -273,10 +273,13 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
 
       try {
         const drafts = await db.getAllDrafts(userEmail);
+        const historyItems = await db.getHistory(userEmail);
+        const allLocalSources = [...drafts, ...historyItems.map(h => h.fullData).filter(Boolean)];
+
         const procLimpo = (rec.NúmerodoProcesso || '').replace(/\D/g, '');
         const autorLimpo = (rec.NomedoAutor || '').trim().toLowerCase();
 
-        const match = drafts.find(d => {
+        const match = allLocalSources.find((d: any) => {
           const dProc = (d.numeroProcesso || '').replace(/\D/g, '');
           const dAutor = (d.nomeAutor || '').trim().toLowerCase();
           return (procLimpo && dProc && procLimpo === dProc) || (autorLimpo && dAutor && autorLimpo === dAutor);
@@ -306,6 +309,39 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
         }
       } catch (eLocal) {
         console.warn('Verificação de fotos locais no IndexedDB ignorada:', eLocal);
+      }
+
+      // Se não encontrou no aparelho local, busca do Drive
+      if (fotosLocaisEncontradas === 0 && pastaOrigemUrl && webhookUrl && webhookUrl.includes('script.google.com')) {
+        try {
+          const urlParams = new URL(webhookUrl);
+          urlParams.searchParams.set('action', 'getDrivePhotos');
+          urlParams.searchParams.set('folderUrl', pastaOrigemUrl);
+          if (userEmail) urlParams.searchParams.set('peritoEmail', userEmail);
+          
+          const resp = await fetch(urlParams.toString());
+          if (resp.ok) {
+            const driveData = await resp.json();
+            if (driveData.photosImovel && Array.isArray(driveData.photosImovel)) {
+              for (const p of driveData.photosImovel) {
+                const blob = base64ToBlob(p.base64);
+                const b64 = await compressImageForDrive(blob);
+                const pdfB64 = await resizeImageForPdf(blob);
+                photosImovelPayload.push({ name: p.name, type: p.type || 'image/jpeg', base64: b64, pdfBase64: pdfB64 });
+              }
+            }
+            if (driveData.photosMedidor && Array.isArray(driveData.photosMedidor)) {
+              for (const p of driveData.photosMedidor) {
+                const blob = base64ToBlob(p.base64);
+                const b64 = await compressImageForDrive(blob);
+                const pdfB64 = await resizeImageForPdf(blob);
+                photosMedidorPayload.push({ name: p.name, type: p.type || 'image/jpeg', base64: b64, pdfBase64: pdfB64 });
+              }
+            }
+          }
+        } catch (eDrive) {
+          console.warn('Aviso ao buscar fotos do Drive para reenvio:', eDrive);
+        }
       }
 
       const payload = {
