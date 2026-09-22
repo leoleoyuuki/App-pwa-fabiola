@@ -563,27 +563,10 @@ function doPost(e) {
           returnBase64: true
         });
 
-        // --- GARANTIA ABSOLUTA DE LIMITE DE PAYLOAD (< 2.5 MB) PARA A VERCEL ---
+        // --- LOG DE PAYLOAD PARA A VERCEL ---
         var payloadCompilacaoJson = JSON.stringify(payloadCompilacao);
         var payloadBytes = payloadCompilacaoJson.length;
         console.log("[Compilação LaTeX] Tamanho do payload para Vercel: " + (payloadBytes / 1024).toFixed(1) + " KB (" + photosImovelCompact.length + " fotos imovel, " + photosMedidorCompact.length + " fotos medidor)");
-
-        if (payloadBytes > 2500000) {
-          console.warn("[Compilação LaTeX] Payload excede 2.5MB (" + (payloadBytes / 1024).toFixed(1) + " KB). Otimizando fotos e campos de texto...");
-          for (var i = 0; i < photosImovelCompact.length; i++) {
-            if (photosImovelCompact[i].base64 && photosImovelCompact[i].base64.length > 80000) {
-              photosImovelCompact[i].base64 = photosImovelCompact[i].base64.substring(0, 80000);
-            }
-          }
-          for (var j = 0; j < photosMedidorCompact.length; j++) {
-            if (photosMedidorCompact[j].base64 && photosMedidorCompact[j].base64.length > 80000) {
-              photosMedidorCompact[j].base64 = photosMedidorCompact[j].base64.substring(0, 80000);
-            }
-          }
-          payloadCompilacao.photosImovel = photosImovelCompact;
-          payloadCompilacao.photosMedidor = photosMedidorCompact;
-          payloadCompilacaoJson = JSON.stringify(payloadCompilacao);
-        }
 
         var respCompilacaoHttp = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/compilar-laudo", {
           method: "post",
