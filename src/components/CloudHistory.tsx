@@ -95,6 +95,25 @@ function normalizeCloudRecord(rec: any): any {
   };
 }
 
+function base64ToBlob(dataUrl: string): Blob {
+  try {
+    const parts = dataUrl.split(',');
+    const header = parts[0] || '';
+    const data = parts[1] || parts[0];
+    const mimeMatch = header.match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const bstr = atob(data);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  } catch (e) {
+    return new Blob([], { type: 'image/jpeg' });
+  }
+}
+
 export const CloudHistory: React.FC<CloudHistoryProps> = ({
   webhookUrl,
   isOnline,
@@ -113,79 +132,124 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
     return `${y}-${m}-${d}`;
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [resumingIndex, setResumingIndex] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [isResending, setIsResending] = useState(false);
   const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Manipulador para Retomar Vistoria (Edição)
-  const handleResumeInspection = async (rec: any) => {
+  // Manipulador para Retomar Vistoria (Edição com Fotos do Cache ou Google Drive)
+  const handleResumeInspection = async (rec: any, index?: number) => {
     if (!rec) return;
 
-    // Tenta recuperar cópia completa salva localmente no histórico
-    let photosImovel: any[] = [];
-    let photosMedidor: any[] = [];
-    let extraData: any = {};
-
-    try {
-      const historyItems = await db.getHistory(userEmail);
-      const procLimpo = (rec.NúmerodoProcesso || '').replace(/\D/g, '');
-      const autorLimpo = (rec.NomedoAutor || '').trim().toLowerCase();
-
-      const match = historyItems.find(h => {
-        if (!h.fullData) return false;
-        const hProc = (h.fullData.numeroProcesso || '').replace(/\D/g, '');
-        const hAutor = (h.fullData.nomeAutor || '').trim().toLowerCase();
-        return (procLimpo && hProc && procLimpo === hProc) || (autorLimpo && hAutor && autorLimpo === hAutor);
-      });
-
-      if (match && match.fullData) {
-        extraData = match.fullData;
-        photosImovel = match.fullData.photosImovel || [];
-        photosMedidor = match.fullData.photosMedidor || [];
-      }
-    } catch (e) {
-      console.warn('Erro ao buscar histórico local para retomar vistoria:', e);
+    if (typeof index === 'number') {
+      setResumingIndex(index);
     }
 
-    const draft: DraftData = {
-      id: 'draft_resume_' + Date.now(),
-      nomeAutor: rec.NomedoAutor || extraData.nomeAutor || '',
-      numeroProcesso: rec.NúmerodoProcesso || extraData.numeroProcesso || '',
-      reuConcessionaria: rec['Réu/Concessionária'] || rec.RéuConcessionária || extraData.reuConcessionaria || '',
-      tipoAcao: rec.TipodeAção || extraData.tipoAcao || 'Consumo',
-      dataVistoria: normalizeToYMD(rec.DatadaVistoria) || extraData.dataVistoria || rec.DatadaVistoria || '',
-      numeroVistoria: rec.NºdaVistoria || extraData.numeroVistoria || '1',
-      periodoVistoria: rec.PeríododaVistoria || extraData.periodoVistoria || 'Manhã 09 - 12 h',
-      representacaoAutor: rec['RepresentaçãoAutorPresente?'] || rec.RepresentaçãoAutorPresente || extraData.representacaoAutor || 'Sim',
-      representacaoReu: rec['RepresentaçãoRéuPresente?'] || rec.RepresentaçãoRéuPresente || extraData.representacaoReu || 'Sim',
-      observacoesPresenca: rec['Obs.PresençadasPartes'] || extraData.observacoesPresenca || '',
-      numeroMedidor: rec.NúmerodoMedidor || extraData.numeroMedidor || '',
-      medidorChip: rec['MedidorcomChip?'] || rec.MedidorcomChip || extraData.medidorChip || 'Não',
-      condicoesMedidor: rec.CondiçõesdoMedidor || extraData.condicoesMedidor || 'Boa (Lacrado)',
-      corteEnergia: rec.CortedeEnergia || extraData.corteEnergia || 'Não',
-      notificacaoPreviaCorte: rec.NotificacaoPreviaCorte || extraData.notificacaoPreviaCorte || 'Não',
-      observacoesMedidor: extraData.observacoesMedidor || '',
-      qtdPessoas: rec.PessoasResidentes || extraData.qtdPessoas || '1',
-      qtdComodos: rec.QuantidadedeCômodos || extraData.qtdComodos || '1',
-      numLampadas: rec.NºdeLâmpadas || extraData.numLampadas || '',
-      numTvs: rec.NºdeTVs || extraData.numTvs || '0',
-      numVentiladores: rec.NºdeVentiladores || extraData.numVentiladores || '0',
-      numVentiladoresTeto: rec.NºdeVentiladoresdeTeto || extraData.numVentiladoresTeto || '0',
-      numArCondicionados: rec.NºdeArCondicionados || extraData.numArCondicionados || '0',
-      numGeladeiras: rec.NºdeGeladeiras || extraData.numGeladeiras || '0',
-      numChuveiros: rec.NºdeChuveirosElétricos || extraData.numChuveiros || '0',
-      numMaquinasLavar: rec.NºdeMáquinasdeLavar || extraData.numMaquinasLavar || '0',
-      numFreezers: rec.NºdeFreezers || extraData.numFreezers || '0',
-      checklist: rec.ChecklistTécnico ? rec.ChecklistTécnico.split(',').map((s: string) => s.trim()) : (extraData.checklist || []),
-      observacoesFinais: rec.ObservaçõesFinaisdoPerito || extraData.observacoesFinais || '',
-      photosImovel: photosImovel,
-      photosMedidor: photosMedidor,
-      updatedAt: new Date().toISOString()
-    };
+    try {
+      // 1. Tenta recuperar cópia completa salva localmente no histórico deste aparelho
+      let photosImovel: any[] = [];
+      let photosMedidor: any[] = [];
+      let extraData: any = {};
 
-    setSelectedRecord(null);
-    onEditRecord?.(draft);
+      try {
+        const historyItems = await db.getHistory(userEmail);
+        const procLimpo = (rec.NúmerodoProcesso || '').replace(/\D/g, '');
+        const autorLimpo = (rec.NomedoAutor || '').trim().toLowerCase();
+
+        const match = historyItems.find(h => {
+          if (!h.fullData) return false;
+          const hProc = (h.fullData.numeroProcesso || '').replace(/\D/g, '');
+          const hAutor = (h.fullData.nomeAutor || '').trim().toLowerCase();
+          return (procLimpo && hProc && procLimpo === hProc) || (autorLimpo && hAutor && autorLimpo === hAutor);
+        });
+
+        if (match && match.fullData) {
+          extraData = match.fullData;
+          photosImovel = match.fullData.photosImovel || [];
+          photosMedidor = match.fullData.photosMedidor || [];
+        }
+      } catch (e) {
+        console.warn('Erro ao buscar histórico local para retomar vistoria:', e);
+      }
+
+      // 2. Se não houver fotos locais, busca automaticamente da pasta do Google Drive
+      const pastaOrigemUrl = rec['LinkdaPasta(GoogleDrive)'] || rec.LinkdaPastaGoogleDrive || rec.folderUrl || '';
+      if ((photosImovel.length === 0 && photosMedidor.length === 0) && pastaOrigemUrl && webhookUrl && webhookUrl.includes('script.google.com')) {
+        try {
+          const urlParams = new URL(webhookUrl);
+          urlParams.searchParams.set('action', 'getDrivePhotos');
+          urlParams.searchParams.set('folderUrl', pastaOrigemUrl);
+          if (userEmail) urlParams.searchParams.set('peritoEmail', userEmail);
+          
+          const resp = await fetch(urlParams.toString());
+          if (resp.ok) {
+            const driveData = await resp.json();
+            if (driveData.photosImovel && Array.isArray(driveData.photosImovel)) {
+              photosImovel = driveData.photosImovel.map((p: any) => ({
+                id: 'drive_' + Math.random().toString(36).substring(2, 9),
+                name: p.name || 'foto_imovel.jpg',
+                type: p.type || 'image/jpeg',
+                original: base64ToBlob(p.base64),
+                thumbnail: p.base64
+              }));
+            }
+            if (driveData.photosMedidor && Array.isArray(driveData.photosMedidor)) {
+              photosMedidor = driveData.photosMedidor.map((p: any) => ({
+                id: 'drive_' + Math.random().toString(36).substring(2, 9),
+                name: p.name || 'foto_medidor.jpg',
+                type: p.type || 'image/jpeg',
+                original: base64ToBlob(p.base64),
+                thumbnail: p.base64
+              }));
+            }
+          }
+        } catch (eDrive) {
+          console.warn('Aviso ao recuperar fotos do Google Drive:', eDrive);
+        }
+      }
+
+      const draft: DraftData = {
+        id: 'draft_resume_' + Date.now(),
+        nomeAutor: rec.NomedoAutor || extraData.nomeAutor || '',
+        numeroProcesso: rec.NúmerodoProcesso || extraData.numeroProcesso || '',
+        reuConcessionaria: rec['Réu/Concessionária'] || rec.RéuConcessionária || extraData.reuConcessionaria || '',
+        tipoAcao: rec.TipodeAção || extraData.tipoAcao || 'Consumo',
+        dataVistoria: normalizeToYMD(rec.DatadaVistoria) || extraData.dataVistoria || rec.DatadaVistoria || '',
+        numeroVistoria: rec.NºdaVistoria || extraData.numeroVistoria || '1',
+        periodoVistoria: rec.PeríododaVistoria || extraData.periodoVistoria || 'Manhã 09 - 12 h',
+        representacaoAutor: rec['RepresentaçãoAutorPresente?'] || rec.RepresentaçãoAutorPresente || extraData.representacaoAutor || 'Sim',
+        representacaoReu: rec['RepresentaçãoRéuPresente?'] || rec.RepresentaçãoRéuPresente || extraData.representacaoReu || 'Sim',
+        observacoesPresenca: rec['Obs.PresençadasPartes'] || extraData.observacoesPresenca || '',
+        numeroMedidor: rec.NúmerodoMedidor || extraData.numeroMedidor || '',
+        medidorChip: rec['MedidorcomChip?'] || rec.MedidorcomChip || extraData.medidorChip || 'Não',
+        condicoesMedidor: rec.CondiçõesdoMedidor || extraData.condicoesMedidor || 'Boa (Lacrado)',
+        corteEnergia: rec.CortedeEnergia || extraData.corteEnergia || 'Não',
+        notificacaoPreviaCorte: rec.NotificacaoPreviaCorte || extraData.notificacaoPreviaCorte || 'Não',
+        observacoesMedidor: extraData.observacoesMedidor || '',
+        qtdPessoas: rec.PessoasResidentes || extraData.qtdPessoas || '1',
+        qtdComodos: rec.QuantidadedeCômodos || extraData.qtdComodos || '1',
+        numLampadas: rec.NºdeLâmpadas || extraData.numLampadas || '',
+        numTvs: rec.NºdeTVs || extraData.numTvs || '0',
+        numVentiladores: rec.NºdeVentiladores || extraData.numVentiladores || '0',
+        numVentiladoresTeto: rec.NºdeVentiladoresdeTeto || extraData.numVentiladoresTeto || '0',
+        numArCondicionados: rec.NºdeArCondicionados || extraData.numArCondicionados || '0',
+        numGeladeiras: rec.NºdeGeladeiras || extraData.numGeladeiras || '0',
+        numChuveiros: rec.NºdeChuveirosElétricos || extraData.numChuveiros || '0',
+        numMaquinasLavar: rec.NºdeMáquinasdeLavar || extraData.numMaquinasLavar || '0',
+        numFreezers: rec.NºdeFreezers || extraData.numFreezers || '0',
+        checklist: rec.ChecklistTécnico ? rec.ChecklistTécnico.split(',').map((s: string) => s.trim()) : (extraData.checklist || []),
+        observacoesFinais: rec.ObservaçõesFinaisdoPerito || extraData.observacoesFinais || '',
+        photosImovel: photosImovel,
+        photosMedidor: photosMedidor,
+        updatedAt: new Date().toISOString()
+      };
+
+      setSelectedRecord(null);
+      onEditRecord?.(draft);
+    } finally {
+      setResumingIndex(null);
+    }
   };
 
   // Manipulador para Reenviar Vistoria para o Apps Script
@@ -633,9 +697,10 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                 <button
                   type="button"
+                  disabled={resumingIndex === index}
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleResumeInspection(rec);
+                    handleResumeInspection(rec, index);
                   }}
                   style={{
                     display: 'flex',
@@ -648,12 +713,21 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
                     border: '1px solid var(--accent-gold)',
                     color: 'var(--accent-gold-hover)',
                     borderRadius: 'var(--radius-xs)',
-                    cursor: 'pointer'
+                    cursor: resumingIndex === index ? 'not-allowed' : 'pointer'
                   }}
                   title="Retomar e reenviar esta vistoria"
                 >
-                  <FileEdit size={14} />
-                  Retomar
+                  {resumingIndex === index ? (
+                    <>
+                      <Loader2 size={14} className="spin" />
+                      Fotos...
+                    </>
+                  ) : (
+                    <>
+                      <FileEdit size={14} />
+                      Retomar
+                    </>
+                  )}
                 </button>
                 <ChevronRight size={18} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
               </div>
@@ -830,8 +904,9 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '12px' }}>
                 <button
                   type="button"
-                  className="btn"
-                  onClick={() => handleResumeInspection(selectedRecord)}
+                  className="btn btn-secondary"
+                  disabled={resumingIndex === -1}
+                  onClick={() => handleResumeInspection(selectedRecord, -1)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -840,15 +915,12 @@ export const CloudHistory: React.FC<CloudHistoryProps> = ({
                     padding: '12px 10px',
                     fontSize: '0.85rem',
                     fontWeight: 600,
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--accent-gold)',
-                    color: 'var(--accent-gold)',
                     borderRadius: 'var(--radius-sm)',
-                    cursor: 'pointer'
+                    cursor: resumingIndex === -1 ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  <FileEdit size={16} />
-                  Retomar Vistoria
+                  {resumingIndex === -1 ? <Loader2 size={16} className="spin" /> : <FileEdit size={16} />}
+                  {resumingIndex === -1 ? 'Carregando Fotos...' : 'Retomar Vistoria'}
                 </button>
 
                 <button

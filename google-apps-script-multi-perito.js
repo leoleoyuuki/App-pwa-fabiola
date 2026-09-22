@@ -150,7 +150,77 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify(processos)).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 2. PADRÃO / AÇÃO: Relatórios Enviados (Aba "Energia") para a aba "Relatórios Enviados" (CloudHistory)
+    // 2. AÇÃO: Obter Fotos de uma Pasta do Drive para "Retomar Vistoria"
+    if (action === "getdrivephotos" || action === "fotosdrive" || action === "photos") {
+      var targetFolderUrl = params.folderUrl || params.folder || params.url || "";
+      var folderId = extrairFolderId(targetFolderUrl);
+      var result = { photosImovel: [], photosMedidor: [] };
+
+      if (folderId) {
+        try {
+          var targetFolder = DriveApp.getFolderById(folderId);
+          if (targetFolder) {
+            // Fotos Residência
+            var subRes = targetFolder.getFoldersByName("Fotos da Residência");
+            if (subRes.hasNext()) {
+              var fRes = subRes.next().getFiles();
+              while (fRes.hasNext()) {
+                var file = fRes.next();
+                var mime = file.getMimeType();
+                if (mime.indexOf("image") !== -1 || mime.indexOf("jpeg") !== -1 || mime.indexOf("png") !== -1 || mime.indexOf("octet-stream") !== -1) {
+                  try {
+                    var thumb = null;
+                    try { thumb = file.getThumbnail(); } catch (eT) {}
+                    var b64 = thumb ? Utilities.base64Encode(thumb.getBytes()) : "";
+                    if (!b64 && file.getSize() < 300000) {
+                      b64 = Utilities.base64Encode(file.getBlob().getBytes());
+                    }
+                    if (b64) {
+                      result.photosImovel.push({
+                        name: file.getName(),
+                        type: mime.indexOf("image") !== -1 ? mime : "image/jpeg",
+                        base64: "data:image/jpeg;base64," + b64
+                      });
+                    }
+                  } catch (eF) {}
+                }
+              }
+            }
+            // Fotos Medidor
+            var subMed = targetFolder.getFoldersByName("Fotos do Medidor");
+            if (subMed.hasNext()) {
+              var fMed = subMed.next().getFiles();
+              while (fMed.hasNext()) {
+                var fileM = fMed.next();
+                var mimeM = fileM.getMimeType();
+                if (mimeM.indexOf("image") !== -1 || mimeM.indexOf("jpeg") !== -1 || mimeM.indexOf("png") !== -1 || mimeM.indexOf("octet-stream") !== -1) {
+                  try {
+                    var thumbM = null;
+                    try { thumbM = fileM.getThumbnail(); } catch (eTM) {}
+                    var b64M = thumbM ? Utilities.base64Encode(thumbM.getBytes()) : "";
+                    if (!b64M && fileM.getSize() < 300000) {
+                      b64M = Utilities.base64Encode(fileM.getBlob().getBytes());
+                    }
+                    if (b64M) {
+                      result.photosMedidor.push({
+                        name: fileM.getName(),
+                        type: mimeM.indexOf("image") !== -1 ? mimeM : "image/jpeg",
+                        base64: "data:image/jpeg;base64," + b64M
+                      });
+                    }
+                  } catch (eFM) {}
+                }
+              }
+            }
+          }
+        } catch (eDrive) {
+          console.warn("Aviso ao buscar fotos do drive:", eDrive.toString());
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 3. PADRÃO / AÇÃO: Relatórios Enviados (Aba "Energia") para a aba "Relatórios Enviados" (CloudHistory)
     var sheetEnergia = buscarAbaFlexivel(ss, "Energia") || ss.getSheets()[0];
     var relatorios = [];
     if (sheetEnergia) {
