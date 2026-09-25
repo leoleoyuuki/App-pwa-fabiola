@@ -150,7 +150,51 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify(processos)).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 2. AÇÃO: Obter Fotos de uma Pasta do Drive para "Retomar Vistoria"
+    // 2. AÇÃO: Obter Arquivos de Dados do Laudo do Drive (dados.tex, historico.csv, modelo_auto.tex)
+    if (action === "getdrivefiles" || action === "drivefiles" || action === "files") {
+      var targetFolderUrl = params.folderUrl || params.folder || params.url || "";
+      var folderId = extrairFolderId(targetFolderUrl);
+      var filesResult = { 
+        status: "sucesso",
+        dadosTex: "", 
+        historicoCsv: "", 
+        modeloAutoTex: "",
+        folderId: folderId || "",
+        foundFiles: []
+      };
+
+      if (folderId) {
+        try {
+          var targetFolder = DriveApp.getFolderById(folderId);
+          if (targetFolder) {
+            var fD = targetFolder.getFilesByName("dados.tex");
+            if (fD.hasNext()) {
+              filesResult.dadosTex = fD.next().getBlob().getDataAsString("UTF-8");
+              filesResult.foundFiles.push("dados.tex");
+            }
+            
+            var fC = targetFolder.getFilesByName("historico_consumo.csv");
+            if (!fC.hasNext()) fC = targetFolder.getFilesByName("historico.csv");
+            if (fC.hasNext()) {
+              filesResult.historicoCsv = fC.next().getBlob().getDataAsString("UTF-8");
+              filesResult.foundFiles.push("historico_consumo.csv");
+            }
+            
+            var fM = targetFolder.getFilesByName("modelo_auto.tex");
+            if (fM.hasNext()) {
+              filesResult.modeloAutoTex = fM.next().getBlob().getDataAsString("UTF-8");
+              filesResult.foundFiles.push("modelo_auto.tex");
+            }
+          }
+        } catch (eF) {
+          console.warn("Aviso ao buscar arquivos do drive:", eF.toString());
+          filesResult.error = eF.toString();
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify(filesResult)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2.1 AÇÃO: Obter Fotos de uma Pasta do Drive para "Retomar Vistoria"
     if (action === "getdrivephotos" || action === "fotosdrive" || action === "photos") {
       var targetFolderUrl = params.folderUrl || params.folder || params.url || "";
       var folderId = extrairFolderId(targetFolderUrl);
