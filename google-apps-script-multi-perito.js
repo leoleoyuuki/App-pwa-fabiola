@@ -212,36 +212,102 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 3. PADRÃO / AÇÃO: Relatórios Enviados (Aba "Energia") para a aba "Relatórios Enviados" (CloudHistory)
-    var sheetEnergia = buscarAbaFlexivel(ss, "Energia") || ss.getSheets()[0];
-    var relatorios = [];
-    if (sheetEnergia) {
-      var dataEnergia = sheetEnergia.getDataRange().getDisplayValues();
-      if (dataEnergia.length > 1) {
-        var headersE = dataEnergia[0];
+    // 2.2 AÇÃO: Listar Laudos Públicos do Portfólio Geral no Google Drive
+    // Pasta Alvo Oficial: 1zMcAmdNz0JysHqtKI_qqJ6-2U5uJWzVx
+    if (action === "listar_portfolio" || action === "portfolio") {
+      var targetFolderId = params.folderId || "1zMcAmdNz0JysHqtKI_qqJ6-2U5uJWzVx";
+      var arquivosPortfolio = [];
+      try {
+        var rootPort = DriveApp.getFolderById(targetFolderId);
+        if (rootPort) {
+          var catFolders = rootPort.getFolders();
+          while (catFolders.hasNext()) {
+            var catF = catFolders.next();
+            var catName = catF.getName();
+            
+            // Subpastas por tipo (TOI, Consumo, etc)
+            var subFolders = catF.getFolders();
+            while (subFolders.hasNext()) {
+              var subF = subFolders.next();
+              var subName = subF.getName();
+              
+              var files = subF.getFiles();
+              while (files.hasNext()) {
+                var fl = files.next();
+                if (fl.getMimeType() === "application/pdf" || fl.getName().toLowerCase().endsWith(".pdf")) {
+                  arquivosPortfolio.push({
+                    id: fl.getId(),
+                    name: fl.getName(),
+                    size: fl.getSize(),
+                    dateCreated: fl.getDateCreated().toISOString(),
+                    categoria: catName,
+                    subtipo: subName,
+                    viewUrl: "https://drive.google.com/file/d/" + fl.getId() + "/view",
+                    downloadUrl: "https://drive.google.com/uc?export=download&id=" + fl.getId(),
+                    folderUrl: subF.getUrl()
+                  });
+                }
+              }
+            }
 
-        for (var r = 1; r < dataEnergia.length; r++) {
-          var linha = dataEnergia[r];
-          var item = {};
+            // Arquivos soltos diretamente na categoria
+            var directFiles = catF.getFiles();
+            while (directFiles.hasNext()) {
+              var dFl = directFiles.next();
+              if (dFl.getMimeType() === "application/pdf" || dFl.getName().toLowerCase().endsWith(".pdf")) {
+                arquivosPortfolio.push({
+                  id: dFl.getId(),
+                  name: dFl.getName(),
+                  size: dFl.getSize(),
+                  dateCreated: dFl.getDateCreated().toISOString(),
+                  categoria: catName,
+                  subtipo: "Geral",
+                  viewUrl: "https://drive.google.com/file/d/" + dFl.getId() + "/view",
+                  downloadUrl: "https://drive.google.com/uc?export=download&id=" + dFl.getId(),
+                  folderUrl: catF.getUrl()
+                });
+              }
+            }
+          }
+        }
+      } catch (ePort) {
+        console.warn("Erro ao listar portfolio:", ePort.toString());
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        portfolioFolderId: targetFolderId,
+        portfolioUrl: "https://drive.google.com/drive/folders/" + targetFolderId,
+        total: arquivosPortfolio.length,
+        arquivos: arquivosPortfolio
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 3. PADRÃO / AÇÃO: Relatórios de Vistorias across all categories (Energia, Água, Gás, Imobiliário)
+    var abasVistorias = ["Energia", "Água", "Gás", "Imobiliário"];
+    var relatorios = [];
+    
+    for (var a = 0; a < abasVistorias.length; a++) {
+      var abaNome = abasVistorias[a];
+      var sheetAtual = buscarAbaFlexivel(ss, abaNome);
+      if (!sheetAtual) continue;
+      
+      var dataAba = sheetAtual.getDataRange().getDisplayValues();
+      if (dataAba.length > 1) {
+        var headersAba = dataAba[0];
+        for (var r = 1; r < dataAba.length; r++) {
+          var linha = dataAba[r];
+          var item = { categoriaVistoria: abaNome };
           var temDado = false;
-          for (var c = 0; c < headersE.length; c++) {
-            var headerOriginal = String(headersE[c] || "").trim();
+          for (var c = 0; c < headersAba.length; c++) {
+            var headerOriginal = String(headersAba[c] || "").trim();
             if (!headerOriginal) continue;
             var val = linha[c] || "";
             if (val) temDado = true;
 
-            // 1. Chave exata do cabeçalho original da planilha
             item[headerOriginal] = val;
-
-            // 2. Chave sem espaços preservando acentos: "Número do Processo" -> "NúmerodoProcesso"
             var chaveSemEspacos = headerOriginal.replace(/\s+/g, "");
             item[chaveSemEspacos] = val;
-
-            // 3. Chave sem barras/pontos/interrogação: "Réu / Concessionária" -> "RéuConcessionária"
             var chaveLimpa = chaveSemEspacos.replace(/[\/\.\?]/g, "");
             item[chaveLimpa] = val;
-
-            // 4. Chave normalizada em minúsculas sem acentos: "numerodoprocesso"
             var chaveNorm = headerOriginal.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
             if (chaveNorm) {
               item[chaveNorm] = val;
@@ -251,7 +317,6 @@ function doGet(e) {
             relatorios.push(item);
           }
         }
-      }
     }
 
     return ContentService.createTextOutput(JSON.stringify(relatorios)).setMimeType(ContentService.MimeType.JSON);
@@ -289,6 +354,68 @@ function doPost(e) {
     }
 
     var data = JSON.parse(e.postData.contents);
+
+    // 🚀 AÇÃO DEDICADA: Upload de Laudo Público (LGPD) para o Portfólio Geral no Google Drive
+    // Pasta Alvo Oficial: 1zMcAmdNz0JysHqtKI_qqJ6-2U5uJWzVx
+    if (data.action === "upload_portfolio_laudo" || data.action === "salvar_laudo_publico" || data.action === "portfolio_upload") {
+      try {
+        var targetFolderId = data.portfolioFolderId || data.targetFolderId || "1zMcAmdNz0JysHqtKI_qqJ6-2U5uJWzVx";
+        var rootFolder = DriveApp.getFolderById(targetFolderId);
+        
+        var categoria = String(data.categoria || "Energia").trim();
+        var subtipo = String(data.subtipo || "Consumo").trim();
+        
+        var nomeCatPasta = "Energia";
+        var catLower = categoria.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (catLower.indexOf("agua") !== -1) nomeCatPasta = "Água";
+        else if (catLower.indexOf("gas") !== -1) nomeCatPasta = "Gás";
+        else if (catLower.indexOf("imov") !== -1 || catLower.indexOf("patrim") !== -1 || catLower.indexOf("civil") !== -1) nomeCatPasta = "Imóvel";
+        
+        var pastaCat = criarOuObterPasta(rootFolder, nomeCatPasta);
+        var pastaSub = criarOuObterPasta(pastaCat, subtipo);
+        
+        var filename = data.filename || ("Laudo_Publico_LGPD_" + (data.processo || "laudo").toString().replace(/\D/g, "") + ".pdf");
+        if (!filename.toLowerCase().endsWith(".pdf")) filename += ".pdf";
+        
+        var pdfBase64 = data.pdfBase64 || data.base64 || "";
+        if (typeof pdfBase64 === "string") {
+          pdfBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, "");
+        }
+        
+        if (!pdfBase64) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "erro",
+            message: "Nenhum arquivo PDF base64 fornecido para salvar no portfólio."
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+        
+        var decodedBlob = Utilities.newBlob(Utilities.base64Decode(pdfBase64), "application/pdf", filename);
+        var file = pastaSub.createFile(decodedBlob);
+        try {
+          file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        } catch (_) {}
+        
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "sucesso",
+          fileId: file.getId(),
+          fileUrl: file.getUrl(),
+          downloadUrl: "https://drive.google.com/uc?export=download&id=" + file.getId(),
+          viewUrl: "https://drive.google.com/file/d/" + file.getId() + "/view",
+          filename: filename,
+          categoria: nomeCatPasta,
+          subtipo: subtipo,
+          folderName: pastaSub.getName(),
+          folderUrl: pastaSub.getUrl(),
+          portfolioUrl: "https://drive.google.com/drive/folders/" + targetFolderId
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (ePortUpload) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Erro ao salvar no portfólio: " + ePortUpload.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     var peritoEmail = (data.peritoEmail || PERITO_PADRAO_EMAIL).toLowerCase().trim();
     var config = PERITOS_CONFIG[peritoEmail] || PERITOS_CONFIG[PERITO_PADRAO_EMAIL];
 
