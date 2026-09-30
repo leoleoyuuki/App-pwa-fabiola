@@ -317,6 +317,7 @@ function doGet(e) {
             relatorios.push(item);
           }
         }
+      }
     }
 
     return ContentService.createTextOutput(JSON.stringify(relatorios)).setMimeType(ContentService.MimeType.JSON);
