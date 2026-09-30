@@ -167,23 +167,21 @@ function doGet(e) {
         try {
           var targetFolder = DriveApp.getFolderById(folderId);
           if (targetFolder) {
-            var fD = targetFolder.getFilesByName("dados.tex");
-            if (fD.hasNext()) {
-              filesResult.dadosTex = fD.next().getBlob().getDataAsString("UTF-8");
-              filesResult.foundFiles.push("dados.tex");
-            }
-            
-            var fC = targetFolder.getFilesByName("historico_consumo.csv");
-            if (!fC.hasNext()) fC = targetFolder.getFilesByName("historico.csv");
-            if (fC.hasNext()) {
-              filesResult.historicoCsv = fC.next().getBlob().getDataAsString("UTF-8");
-              filesResult.foundFiles.push("historico_consumo.csv");
-            }
-            
-            var fM = targetFolder.getFilesByName("modelo_auto.tex");
-            if (fM.hasNext()) {
-              filesResult.modeloAutoTex = fM.next().getBlob().getDataAsString("UTF-8");
-              filesResult.foundFiles.push("modelo_auto.tex");
+            var filesIterator = targetFolder.getFiles();
+            while (filesIterator.hasNext()) {
+              var fObj = filesIterator.next();
+              var fName = fObj.getName().toLowerCase();
+              
+              if (!filesResult.dadosTex && fName.indexOf("dado") !== -1 && fName.indexOf(".tex") !== -1) {
+                filesResult.dadosTex = fObj.getBlob().getDataAsString("UTF-8");
+                filesResult.foundFiles.push(fObj.getName());
+              } else if (!filesResult.historicoCsv && (fName.indexOf("historico") !== -1 || fName.indexOf("consumo") !== -1 || fName.indexOf("fatura") !== -1) && fName.indexOf(".csv") !== -1) {
+                filesResult.historicoCsv = fObj.getBlob().getDataAsString("UTF-8");
+                filesResult.foundFiles.push(fObj.getName());
+              } else if (!filesResult.modeloAutoTex && fName.indexOf("modelo") !== -1 && fName.indexOf(".tex") !== -1) {
+                filesResult.modeloAutoTex = fObj.getBlob().getDataAsString("UTF-8");
+                filesResult.foundFiles.push(fObj.getName());
+              }
             }
           }
         } catch (eF) {
@@ -194,7 +192,7 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify(filesResult)).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 2.1 AÇÃO: Obter Fotos de uma Pasta do Drive para "Retomar Vistoria"
+    // 2.1 AÇÃO: Obter Fotos de uma Pasta do Drive para "Retomar Vistoria" e Compilação do Laudo
     if (action === "getdrivephotos" || action === "fotosdrive" || action === "photos") {
       var targetFolderUrl = params.folderUrl || params.folder || params.url || "";
       var folderId = extrairFolderId(targetFolderUrl);
@@ -204,51 +202,11 @@ function doGet(e) {
         try {
           var targetFolder = DriveApp.getFolderById(folderId);
           if (targetFolder) {
-            // Fotos Residência
-            var subRes = targetFolder.getFoldersByName("Fotos da Residência");
-            if (subRes.hasNext()) {
-              var fRes = subRes.next().getFiles();
-              while (fRes.hasNext()) {
-                var file = fRes.next();
-                var mime = file.getMimeType();
-                if (mime.indexOf("image") !== -1 || mime.indexOf("jpeg") !== -1 || mime.indexOf("png") !== -1 || mime.indexOf("octet-stream") !== -1) {
-                  try {
-                    var b64 = obterThumbnailUltraLeveBase64(file);
-                    if (b64) {
-                      result.photosImovel.push({
-                        name: file.getName(),
-                        type: mime.indexOf("image") !== -1 ? mime : "image/jpeg",
-                        base64: "data:image/jpeg;base64," + b64
-                      });
-                    }
-                  } catch (eF) {}
-                }
-              }
-            }
-            // Fotos Medidor
-            var subMed = targetFolder.getFoldersByName("Fotos do Medidor");
-            if (subMed.hasNext()) {
-              var fMed = subMed.next().getFiles();
-              while (fMed.hasNext()) {
-                var fileM = fMed.next();
-                var mimeM = fileM.getMimeType();
-                if (mimeM.indexOf("image") !== -1 || mimeM.indexOf("jpeg") !== -1 || mimeM.indexOf("png") !== -1 || mimeM.indexOf("octet-stream") !== -1) {
-                  try {
-                    var b64M = obterThumbnailUltraLeveBase64(fileM);
-                    if (b64M) {
-                      result.photosMedidor.push({
-                        name: fileM.getName(),
-                        type: mimeM.indexOf("image") !== -1 ? mimeM : "image/jpeg",
-                        base64: "data:image/jpeg;base64," + b64M
-                      });
-                    }
-                  } catch (eFM) {}
-                }
-              }
-            }
+            result = extrairFotosDePastaDrive(targetFolder);
           }
         } catch (eDrive) {
           console.warn("Aviso ao buscar fotos do drive:", eDrive.toString());
+          result.error = eDrive.toString();
         }
       }
       return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
@@ -1021,46 +979,119 @@ function extrairFolderId(url) {
   return null;
 }
 
+function extrairFotosDePastaDrive(targetFolder) {
+  var result = { photosImovel: [], photosMedidor: [] };
+  if (!targetFolder) return result;
+
+  var processarArquivoFoto = function(file, pastaCategoriaHint) {
+    try {
+      var mime = (file.getMimeType() || "").toLowerCase();
+      var name = file.getName();
+      var isImg = mime.indexOf("image") !== -1 || mime.indexOf("octet-stream") !== -1 || name.match(/\.(jpe?g|png|webp|heic)$/i);
+      if (!isImg) return;
+
+      var b64 = obterThumbnailUltraLeveBase64(file);
+      var fileId = file.getId();
+      var nameLower = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      
+      var isMedidor = (pastaCategoriaHint === "medidor") ||
+        nameLower.indexOf("medid") !== -1 ||
+        nameLower.indexOf("relog") !== -1 ||
+        nameLower.indexOf("lacre") !== -1 ||
+        nameLower.indexOf("padrao") !== -1;
+
+      var item = {
+        id: fileId,
+        name: name,
+        type: mime.indexOf("image") !== -1 ? mime : "image/jpeg",
+        base64: b64 ? ("data:image/jpeg;base64," + b64) : "",
+        url: "https://drive.google.com/uc?export=view&id=" + fileId
+      };
+
+      if (isMedidor) {
+        result.photosMedidor.push(item);
+      } else {
+        result.photosImovel.push(item);
+      }
+    } catch (eProc) {
+      console.warn("Erro ao processar foto " + file.getName() + ": " + eProc.toString());
+    }
+  };
+
+  // 1. Vasculha todas as subpastas flexivelmente (qualquer nome)
+  try {
+    var subFolders = targetFolder.getFolders();
+    while (subFolders.hasNext()) {
+      var sub = subFolders.next();
+      var sName = sub.getName().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      var hint = (sName.indexOf("medid") !== -1 || sName.indexOf("relog") !== -1 || sName.indexOf("lacre") !== -1)
+        ? "medidor"
+        : "imovel";
+
+      var fIter = sub.getFiles();
+      while (fIter.hasNext()) {
+        processarArquivoFoto(fIter.next(), hint);
+      }
+    }
+  } catch (eSub) {
+    console.warn("Erro ao listar subpastas:", eSub.toString());
+  }
+
+  // 2. Vasculha arquivos soltos na raiz da pasta da vistoria
+  try {
+    var rIter = targetFolder.getFiles();
+    while (rIter.hasNext()) {
+      processarArquivoFoto(rIter.next(), "auto");
+    }
+  } catch (eRoot) {
+    console.warn("Erro ao listar arquivos da raiz:", eRoot.toString());
+  }
+
+  return result;
+}
+
 function obterThumbnailUltraLeveBase64(file) {
   if (!file) return "";
   var fileId = file.getId();
-  
-  // 1. Tenta obter thumbnail nativo otimizado a 600px diretamente pelo CDN do Google Drive (~20-25 KB)
+
+  // 1. Prioridade absoluta: Thumbnail nativo pré-otimizado do Google Drive (~800px, ~50-80KB)
   try {
-    try {
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    } catch (eShare) {}
-    
-    var thumbUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w600";
-    var resp = UrlFetchApp.fetch(thumbUrl, { muteHttpExceptions: true });
-    if (resp.getResponseCode() === 200) {
-      var bytes = resp.getBlob().getBytes();
-      if (bytes && bytes.length > 500 && bytes.length < 250000) {
-        return Utilities.base64Encode(bytes);
-      }
-    }
-  } catch (eThumb) {
-    console.warn("Aviso ao buscar thumbnail 600px do Drive:", eThumb.toString());
-  }
-  
-  // 2. Fallback para getThumbnail nativo
-  try {
-    var thumbFallback = file.getThumbnail();
-    if (thumbFallback) {
-      var tBytes = thumbFallback.getBytes();
-      if (tBytes && tBytes.length < 400000) {
+    var thumb = file.getThumbnail();
+    if (thumb) {
+      var tBytes = thumb.getBytes();
+      if (tBytes && tBytes.length > 0) {
         return Utilities.base64Encode(tBytes);
       }
     }
-  } catch (eF) {}
+  } catch (eThumb) {}
 
-  // 3. Fallback final para arquivo pequeno
+  // 2. Segundo recurso: Fallback CDN com largura 1000px do Google Drive
   try {
-    if (file.getSize() < 200000) {
-      return Utilities.base64Encode(file.getBlob().getBytes());
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (eS) {}
+    var thumbUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1000";
+    var resp = UrlFetchApp.fetch(thumbUrl, { muteHttpExceptions: true });
+    if (resp.getResponseCode() === 200) {
+      var cdnBytes = resp.getBlob().getBytes();
+      if (cdnBytes && cdnBytes.length > 500) {
+        return Utilities.base64Encode(cdnBytes);
+      }
     }
-  } catch (eSmall) {}
-  
+  } catch (eCdn) {}
+
+  // 3. Terceiro recurso: Se não houver thumbnail e o arquivo for pequeno (< 1.5MB), lê bytes originais
+  try {
+    var size = file.getSize();
+    if (size <= 1500000) {
+      var blob = file.getBlob();
+      var bytes = blob.getBytes();
+      if (bytes && bytes.length > 0) {
+        return Utilities.base64Encode(bytes);
+      }
+    }
+  } catch (eBlob) {}
+
   return "";
 }
 
