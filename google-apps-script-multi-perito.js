@@ -270,6 +270,101 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // 1.1 AÇÃO: Migrar UMA Vistoria Específica da Planilha Antiga para a Planilha Principal (Item 2)
+    if (action === "migrar_vistoria_antiga" || action === "gravar_vistoria_antiga") {
+      try {
+        var linhaAlvo = parseInt(params.linhaIndex || params.linha || "0", 10);
+        var procAlvo = String(params.processo || params.numeroProcesso || "").trim();
+        var autorAlvo = String(params.nomeAutor || params.autor || "").trim();
+
+        var sheetEnergia = buscarAbaFlexivel(ss, "Energia") || buscarAbaFlexivel(ss, "Respostas ao formulário 1") || ss.getSheets()[0];
+        var idPlanilhaAntiga = "1bk2TXTKdCJzz7opVk8LazhHVduUJRvjzalSL0ZOskkA";
+        var ssAntiga = SpreadsheetApp.openById(idPlanilhaAntiga);
+        var abaAntiga = ssAntiga.getSheets()[0];
+        var linhasAntigas = abaAntiga.getDataRange().getDisplayValues();
+
+        var linhaEncontrada = null;
+        if (linhaAlvo > 1 && linhaAlvo <= linhasAntigas.length) {
+          linhaEncontrada = linhasAntigas[linhaAlvo - 1];
+        } else if (procAlvo || autorAlvo) {
+          for (var li = 1; li < linhasAntigas.length; li++) {
+            var rLinha = linhasAntigas[li];
+            var procLinha = rLinha[4] || "";
+            var autorLinha = rLinha[3] || "";
+            if ((procAlvo && procLinha.indexOf(procAlvo) !== -1) || (autorAlvo && autorLinha.toLowerCase().indexOf(autorAlvo.toLowerCase()) !== -1)) {
+              linhaEncontrada = rLinha;
+              break;
+            }
+          }
+        }
+
+        if (!linhaEncontrada) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "erro",
+            message: "Vistoria específica não localizada na planilha antiga."
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+
+        var objVistoria = {
+          dataEnvio: linhaEncontrada[0] || "",
+          nomeAutor: linhaEncontrada[3] || "",
+          numeroProcesso: linhaEncontrada[4] || "",
+          reuConcessionaria: linhaEncontrada[5] || "",
+          tipoAcao: linhaEncontrada[15] || "Consumo",
+          dataVistoria: linhaEncontrada[7] || "",
+          numeroVistoria: linhaEncontrada[38] || "1",
+          periodoVistoria: linhaEncontrada[8] || "Tarde",
+          representacaoAutor: linhaEncontrada[10] || "Presente",
+          representacaoReu: linhaEncontrada[11] || "Ausente",
+          observacoesPresenca: linhaEncontrada[12] || "",
+          numeroMedidor: linhaEncontrada[14] || "",
+          medidorChip: linhaEncontrada[16] || "Não",
+          condicoesMedidor: linhaEncontrada[17] || "Boa (Lacrado)",
+          corteEnergia: linhaEncontrada[26] || "Não",
+          qtdPessoas: linhaEncontrada[19] || "3",
+          qtdComodos: linhaEncontrada[20] || "5",
+          numLampadas: linhaEncontrada[22] || "8",
+          numTvs: linhaEncontrada[23] || "2",
+          numVentiladores: linhaEncontrada[24] || "2",
+          numVentiladoresTeto: linhaEncontrada[27] || "1",
+          numArCondicionados: linhaEncontrada[28] || "0",
+          numGeladeiras: linhaEncontrada[25] || "1",
+          numChuveiros: linhaEncontrada[30] || "1",
+          numMaquinasLavar: linhaEncontrada[31] || "1",
+          numFreezers: linhaEncontrada[29] || "0",
+          checklist: linhaEncontrada[34] || "",
+          observacoesFinais: linhaEncontrada[35] || "",
+          linkDrive: ""
+        };
+
+        var autorCap = capitalizarNome(objVistoria.nomeAutor || "Autor Sem Nome");
+        var numProcLimpo = objVistoria.numeroProcesso || "";
+
+        if (isRegistroDuplicado(sheetEnergia, numProcLimpo, autorCap, objVistoria.dataVistoria)) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "sucesso",
+            duplicado: true,
+            message: "Esta vistoria (" + autorCap + ") já está gravada na aba Energia.",
+            processo: numProcLimpo
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+
+        gravarLinhaVistoriaDinamica(sheetEnergia, objVistoria, autorCap, "", "");
+
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "sucesso",
+          gravado: true,
+          message: "Vistoria de " + autorCap + " gravada com sucesso na aba Energia!",
+          processo: numProcLimpo
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errMigSingle) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Erro ao migrar vistoria única: " + errMigSingle.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     // 2. AÇÃO: Obter Arquivos de Dados do Laudo do Drive (dados.tex, historico.csv, modelo_auto.tex)
     if (action === "getdrivefiles" || action === "drivefiles" || action === "files") {
       var targetFolderUrl = params.folderUrl || params.folder || params.url || "";
