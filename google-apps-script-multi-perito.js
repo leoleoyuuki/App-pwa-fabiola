@@ -150,6 +150,126 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify(processos)).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // 1.1 AÇÃO: Vistorias da Planilha Antiga cruzadas com a aba "Processos Energia"
+    if (action === "vistorias_antigas" || action === "antigas" || action === "planilha_antiga") {
+      var idPlanilhaAntiga = params.oldSpreadsheetId || "1bk2TXTKdCJzz7opVk8LazhHVduUJRvjzalSL0ZOskkA";
+      var ssAntiga = SpreadsheetApp.openById(idPlanilhaAntiga);
+      var sheetAntiga = ssAntiga.getSheets()[0];
+      var dataAntiga = sheetAntiga.getDataRange().getDisplayValues();
+      
+      var sheetProcessosRef = buscarAbaFlexivel(ss, "Processos Energia") || buscarAbaFlexivel(ss, "Processos");
+      var mapaProcessos = {};
+      if (sheetProcessosRef) {
+        var dataProc = sheetProcessosRef.getDataRange().getDisplayValues();
+        if (dataProc.length > 1) {
+          var hProc = dataProc[0];
+          var colProcIdx = acharIndiceColuna(hProc, ["numerodoprocessocnj", "numerodoprocesso", "processo", "cnj"]);
+          for (var pIdx = 1; pIdx < dataProc.length; pIdx++) {
+            var rP = dataProc[pIdx];
+            var numP = colProcIdx >= 0 ? String(rP[colProcIdx] || "") : "";
+            var digitsP = numP.replace(/[^0-9]/g, "");
+            if (digitsP) {
+              mapaProcessos[digitsP] = { linhaIndex: pIdx + 1, rowData: rP, headers: hProc };
+            }
+          }
+        }
+      }
+
+      var vistoriasAntigas = [];
+      if (dataAntiga.length > 1) {
+        var hAntiga = dataAntiga[0];
+        
+        var cDataHora = acharIndiceColuna(hAntiga, ["carimbodedatahora", "carimbo", "datahora"]);
+        var cAutor = acharIndiceColuna(hAntiga, ["nomedoautor", "autor"]);
+        var cProc = acharIndiceColuna(hAntiga, ["numerodoprocesso", "processo"]);
+        var cReu = acharIndiceColuna(hAntiga, ["reuconcessionaria", "reu", "concessionaria"]);
+        var cDataVist = acharIndiceColuna(hAntiga, ["datadavistoria", "datavistoria"]);
+        var cPeriodo = acharIndiceColuna(hAntiga, ["periododavistoria", "periodovistoria"]);
+        var cRepAut = acharIndiceColuna(hAntiga, ["representacaodoautorpresente", "representacaoautorpresente"]);
+        var cRepReu = acharIndiceColuna(hAntiga, ["representacaodoreupresente", "representacaoreupresente"]);
+        var cObsPres = acharIndiceColuna(hAntiga, ["observacoessobrepresencadaspartes", "obspresenca"]);
+        var cNumMed = acharIndiceColuna(hAntiga, ["numerodomedidor", "medidor"]);
+        var cTipoAcao = acharIndiceColuna(hAntiga, ["tipodeacao", "tipoacao"]);
+        var cChip = acharIndiceColuna(hAntiga, ["medidorpossuichipsmartcard", "medidorcomchip", "chip"]);
+        var cCond = acharIndiceColuna(hAntiga, ["condicoesvisuaisdomedidor", "condicoesdomedidor"]);
+        var cPessoas = acharIndiceColuna(hAntiga, ["quantidadedepessoasresidentes", "pessoasresidentes", "qtdpessoas"]);
+        var cComodos = acharIndiceColuna(hAntiga, ["quantidadedecomodos", "quantidadedecomodos", "comodos"]);
+        var cLamp = acharIndiceColuna(hAntiga, ["ndelampadas", "lampadas"]);
+        var cTvs = acharIndiceColuna(hAntiga, ["ndetvs", "tvs"]);
+        var cVent = acharIndiceColuna(hAntiga, ["ndeventiladores", "ventiladores"]);
+        var cGel = acharIndiceColuna(hAntiga, ["ndegeladeiras", "geladeiras"]);
+        var cCorte = acharIndiceColuna(hAntiga, ["houvecortedeenergia", "cortedeenergia", "corte"]);
+        var cVentTeto = acharIndiceColuna(hAntiga, ["ndeventiladoresdeteto", "ventiladoresteto"]);
+        var cAr = acharIndiceColuna(hAntiga, ["ndearcondicionados", "arcondicionados"]);
+        var cFreezer = acharIndiceColuna(hAntiga, ["ndefreezers", "freezers"]);
+        var cChuv = acharIndiceColuna(hAntiga, ["ndechuveiroseletricos", "chuveiros"]);
+        var cMaq = acharIndiceColuna(hAntiga, ["ndemaquinasdelavarroupa", "maquinasdelavar"]);
+        var cFotoImovel = acharIndiceColuna(hAntiga, ["fotosdoimovel", "fotosimovel"]);
+        var cFotoMed = acharIndiceColuna(hAntiga, ["fotosdomedidor", "fotosmedidor"]);
+        var cChecklist = acharIndiceColuna(hAntiga, ["checklisttecnico", "checklist"]);
+        var cObsFinais = acharIndiceColuna(hAntiga, ["observacoesfinais", "observacoes"]);
+        var cNumVist = acharIndiceColuna(hAntiga, ["ndavistoria", "numerodavistoria"]);
+
+        for (var i = 1; i < dataAntiga.length; i++) {
+          var r = dataAntiga[i];
+          var numProcVal = cProc >= 0 ? String(r[cProc] || "").trim() : "";
+          var autorVal = cAutor >= 0 ? String(r[cAutor] || "").trim() : "";
+          if (!numProcVal && !autorVal) continue;
+
+          var digits = numProcVal.replace(/[^0-9]/g, "");
+          var preEnc = digits ? mapaProcessos[digits] : null;
+
+          var dadosPre = null;
+          if (preEnc) {
+            dadosPre = extrairDadosPreVistoriaDinamico(sheetProcessosRef, numProcVal, autorVal, cDataVist >= 0 ? r[cDataVist] : "");
+          }
+
+          vistoriasAntigas.push({
+            origem: "planilha_antiga",
+            linhaIndex: i + 1,
+            dataEnvio: cDataHora >= 0 ? String(r[cDataHora] || "") : "",
+            nomeAutor: autorVal,
+            numeroProcesso: numProcVal,
+            reuConcessionaria: cReu >= 0 ? String(r[cReu] || "") : "AMPLA ENERGIA E SERVIÇOS S.A.",
+            tipoAcao: cTipoAcao >= 0 ? String(r[cTipoAcao] || "Consumo") : "Consumo",
+            dataVistoria: cDataVist >= 0 ? String(r[cDataVist] || "") : "",
+            numeroVistoria: cNumVist >= 0 ? String(r[cNumVist] || "1") : "1",
+            periodoVistoria: cPeriodo >= 0 ? String(r[cPeriodo] || "Manhã 09 - 12 h") : "Manhã 09 - 12 h",
+            representacaoAutor: cRepAut >= 0 ? String(r[cRepAut] || "Sim") : "Sim",
+            representacaoReu: cRepReu >= 0 ? String(r[cRepReu] || "Não") : "Não",
+            observacoesPresenca: cObsPres >= 0 ? String(r[cObsPres] || "") : "",
+            numeroMedidor: cNumMed >= 0 ? String(r[cNumMed] || "") : "",
+            medidorChip: cChip >= 0 ? String(r[cChip] || "Não") : "Não",
+            condicoesMedidor: cCond >= 0 ? String(r[cCond] || "Boa (Lacrado)") : "Boa (Lacrado)",
+            corteEnergia: cCorte >= 0 ? String(r[cCorte] || "Não") : "Não",
+            qtdPessoas: cPessoas >= 0 ? String(r[cPessoas] || "3") : "3",
+            qtdComodos: cComodos >= 0 ? String(r[cComodos] || "5") : "5",
+            numLampadas: cLamp >= 0 ? String(r[cLamp] || "8") : "8",
+            numTvs: cTvs >= 0 ? String(r[cTvs] || "2") : "2",
+            numVentiladores: cVent >= 0 ? String(r[cVent] || "2") : "2",
+            numVentiladoresTeto: cVentTeto >= 0 ? String(r[cVentTeto] || "1") : "1",
+            numArCondicionados: cAr >= 0 ? String(r[cAr] || "0") : "0",
+            numGeladeiras: cGel >= 0 ? String(r[cGel] || "1") : "1",
+            numChuveiros: cChuv >= 0 ? String(r[cChuv] || "1") : "1",
+            numMaquinasLavar: cMaq >= 0 ? String(r[cMaq] || "1") : "1",
+            numFreezers: cFreezer >= 0 ? String(r[cFreezer] || "0") : "0",
+            checklist: cChecklist >= 0 ? String(r[cChecklist] || "") : "",
+            observacoesFinais: cObsFinais >= 0 ? String(r[cObsFinais] || "") : "",
+            fotosImovelLinks: cFotoImovel >= 0 ? String(r[cFotoImovel] || "") : "",
+            fotosMedidorLinks: cFotoMed >= 0 ? String(r[cFotoMed] || "") : "",
+            temPreVistoria: !!dadosPre,
+            preVistoria: dadosPre ? dadosPre.dados : null
+          });
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "sucesso",
+        total: vistoriasAntigas.length,
+        comPreVistoria: vistoriasAntigas.filter(function(v) { return v.temPreVistoria; }).length,
+        vistorias: vistoriasAntigas
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     // 2. AÇÃO: Obter Arquivos de Dados do Laudo do Drive (dados.tex, historico.csv, modelo_auto.tex)
     if (action === "getdrivefiles" || action === "drivefiles" || action === "files") {
       var targetFolderUrl = params.folderUrl || params.folder || params.url || "";
@@ -419,10 +539,90 @@ function doPost(e) {
 
     var peritoEmail = (data.peritoEmail || PERITO_PADRAO_EMAIL).toLowerCase().trim();
     var config = PERITOS_CONFIG[peritoEmail] || PERITOS_CONFIG[PERITO_PADRAO_EMAIL];
-
-    var mainFolderId = config.mainFolderId;
     var spreadsheetId = config.spreadsheetId;
     var ss = SpreadsheetApp.openById(spreadsheetId);
+
+    // 🚀 AÇÃO DEDICADA: Upload Direto de Foto de Fachada para a Pasta do Drive (Item 7)
+    if (data.action === "upload_fachada" || data.action === "salvar_fachada") {
+      try {
+        var targetFolderUrl = data.folderUrl || "";
+        var folderId = extrairFolderId(targetFolderUrl);
+        if (folderId && data.base64) {
+          var targetFolder = DriveApp.getFolderById(folderId);
+          if (targetFolder) {
+            var subPastas = targetFolder.getFoldersByName("Fotos da Residência");
+            var pastaDestino = subPastas.hasNext() ? subPastas.next() : targetFolder;
+
+            // Remove fotos de fachada anteriores com o mesmo nome para manter atualizado
+            var arqs = pastaDestino.getFilesByName("fachada.jpg");
+            while (arqs.hasNext()) {
+              arqs.next().setTrashed(true);
+            }
+
+            var cleanB64 = data.base64.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
+            var decoded = Utilities.base64Decode(cleanB64);
+            var blob = Utilities.newBlob(decoded, "image/jpeg", "fachada.jpg");
+            var newFile = pastaDestino.createFile(blob);
+
+            return ContentService.createTextOutput(JSON.stringify({
+              status: "sucesso",
+              fileId: newFile.getId(),
+              url: newFile.getUrl(),
+              viewUrl: "https://drive.google.com/uc?export=view&id=" + newFile.getId(),
+              nome: "fachada.jpg",
+              isFachada: true,
+              message: "Foto da Fachada salva com sucesso no Google Drive!"
+            })).setMimeType(ContentService.MimeType.JSON);
+          }
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Pasta do Google Drive não localizada para salvar a foto da Fachada."
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errFachada) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Erro ao salvar foto da fachada no Drive: " + errFachada.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // 🚀 AÇÃO DEDICADA: Migração da Vistoria da Planilha Antiga para a Planilha Principal (Item 2)
+    if (data.action === "migrar_vistoria_antiga" || data.action === "gravar_vistoria_antiga") {
+      try {
+        var vistoriaObj = data.vistoria || data;
+        var sheetEnergia = buscarAbaFlexivel(ss, "Energia") || buscarAbaFlexivel(ss, "Respostas ao formulário 1") || ss.getSheets()[0];
+        
+        var autorCapitalizado = capitalizarNome(vistoriaObj.nomeAutor || "Autor Sem Nome");
+        var numProc = vistoriaObj.numeroProcesso || "";
+        var dataVist = vistoriaObj.dataVistoria || "";
+
+        // Verifica duplicidade
+        if (isRegistroDuplicado(sheetEnergia, numProc, autorCapitalizado, dataVist)) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "sucesso",
+            duplicado: true,
+            message: "Esta vistoria já se encontra gravada na planilha principal.",
+            processo: numProc
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+
+        // Grava na planilha principal reorganizando exatamente nas 30 colunas oficiais
+        gravarLinhaVistoriaDinamica(sheetEnergia, vistoriaObj, autorCapitalizado, vistoriaObj.linkDrive || "", "");
+
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "sucesso",
+          gravado: true,
+          message: "Vistoria da planilha antiga gravada com sucesso na planilha oficial do perito!",
+          processo: numProc
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errMig) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Erro ao migrar vistoria antiga: " + errMig.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
     var tipo = (data.tipoAcao || data.tipoInspecao || "energia").toLowerCase().trim();
 
     var nomeAutorOriginal = data.nomeAutor || "Autor Sem Nome";
@@ -1122,18 +1322,20 @@ function extrairFotosDePastaDrive(targetFolder) {
       var fileId = file.getId();
       var nameLower = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       
-      var isMedidor = (pastaCategoriaHint === "medidor") ||
+      var isFachada = nameLower.indexOf("fachada") !== -1;
+      var isMedidor = !isFachada && ((pastaCategoriaHint === "medidor") ||
         nameLower.indexOf("medid") !== -1 ||
         nameLower.indexOf("relog") !== -1 ||
         nameLower.indexOf("lacre") !== -1 ||
-        nameLower.indexOf("padrao") !== -1;
+        nameLower.indexOf("padrao") !== -1);
 
       var item = {
         id: fileId,
         name: name,
         type: mime.indexOf("image") !== -1 ? mime : "image/jpeg",
         base64: b64 ? ("data:image/jpeg;base64," + b64) : "",
-        url: "https://drive.google.com/uc?export=view&id=" + fileId
+        url: "https://drive.google.com/uc?export=view&id=" + fileId,
+        isFachada: isFachada
       };
 
       if (isMedidor) {
