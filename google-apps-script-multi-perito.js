@@ -635,6 +635,7 @@ function doPost(e) {
     var peritoEmail = (data.peritoEmail || PERITO_PADRAO_EMAIL).toLowerCase().trim();
     var config = PERITOS_CONFIG[peritoEmail] || PERITOS_CONFIG[PERITO_PADRAO_EMAIL];
     var spreadsheetId = config.spreadsheetId;
+    var mainFolderId = data.mainFolderId || config.mainFolderId;
     var ss = SpreadsheetApp.openById(spreadsheetId);
 
     // 🚀 AÇÃO DEDICADA: Upload Direto de Foto de Fachada para a Pasta do Drive (Item 7)
@@ -739,7 +740,8 @@ function doPost(e) {
     cache.put(cacheKey, "processando", 5);
     
     // 1. Cria nova pasta no Google Drive do Perito com versionamento, data e número da vistoria
-    var mainFolder = DriveApp.getFolderById(mainFolderId);
+    var targetMainFolderId = mainFolderId || (config && config.mainFolderId) || "1dIFg4HCfX0C3cG_8WrbFK5PHETt6VUQV";
+    var mainFolder = DriveApp.getFolderById(targetMainFolderId);
     
     var dataVistoriaFormatada = "";
     if (data.dataVistoria) {
