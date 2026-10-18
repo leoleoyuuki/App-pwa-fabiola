@@ -761,35 +761,35 @@ function doPost(e) {
     // 🚀 AÇÃO DEDICADA: Upload Direto de Foto de Fachada para a Pasta do Drive (Item 7)
     if (data.action === "upload_fachada" || data.action === "salvar_fachada") {
       try {
-        var targetFolderUrl = data.folderUrl || "";
-        var folderId = extrairFolderId(targetFolderUrl);
-        if (folderId && data.base64) {
-          var targetFolder = DriveApp.getFolderById(folderId);
-          if (targetFolder) {
-            var subPastas = targetFolder.getFoldersByName("Fotos da Residência");
-            var pastaDestino = subPastas.hasNext() ? subPastas.next() : targetFolder;
+        var targetFolder = localizarPastaVistoriaDrive(ss, config, data.folderUrl, data.processo || data.numeroProcesso, data.nomeAutor || data.autor, mainFolderId);
+        if (targetFolder && data.base64) {
+          var pastaDestino = criarOuObterPasta(targetFolder, "Fotos da Residência");
 
-            // Remove fotos de fachada anteriores com o mesmo nome para manter atualizado
-            var arqs = pastaDestino.getFilesByName("fachada.jpg");
-            while (arqs.hasNext()) {
-              arqs.next().setTrashed(true);
-            }
-
-            var cleanB64 = data.base64.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
-            var decoded = Utilities.base64Decode(cleanB64);
-            var blob = Utilities.newBlob(decoded, "image/jpeg", "fachada.jpg");
-            var newFile = pastaDestino.createFile(blob);
-
-            return ContentService.createTextOutput(JSON.stringify({
-              status: "sucesso",
-              fileId: newFile.getId(),
-              url: newFile.getUrl(),
-              viewUrl: "https://drive.google.com/uc?export=view&id=" + newFile.getId(),
-              nome: "fachada.jpg",
-              isFachada: true,
-              message: "Foto da Fachada salva com sucesso no Google Drive!"
-            })).setMimeType(ContentService.MimeType.JSON);
+          // Remove fotos de fachada anteriores com o mesmo nome para manter atualizado
+          var arqs = pastaDestino.getFilesByName("fachada.jpg");
+          while (arqs.hasNext()) {
+            arqs.next().setTrashed(true);
           }
+
+          var cleanB64 = data.base64.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, "");
+          var decoded = Utilities.base64Decode(cleanB64);
+          var blob = Utilities.newBlob(decoded, "image/jpeg", "fachada.jpg");
+          var newFile = pastaDestino.createFile(blob);
+
+          try {
+            newFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          } catch (_) {}
+
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "sucesso",
+            fileId: newFile.getId(),
+            url: newFile.getUrl(),
+            viewUrl: "https://drive.google.com/uc?export=view&id=" + newFile.getId(),
+            folderUrl: targetFolder.getUrl(),
+            nome: "fachada.jpg",
+            isFachada: true,
+            message: "Foto da Fachada salva com sucesso no Google Drive!"
+          })).setMimeType(ContentService.MimeType.JSON);
         }
         return ContentService.createTextOutput(JSON.stringify({
           status: "erro",
@@ -799,6 +799,91 @@ function doPost(e) {
         return ContentService.createTextOutput(JSON.stringify({
           status: "erro",
           message: "Erro ao salvar foto da fachada no Drive: " + errFachada.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // 🚀 AÇÃO DEDICADA: Upload Direto de Fotos da Vistoria para a Pasta do Drive Criada na Planilha
+    if (data.action === "upload_fotos" || data.action === "upload_foto" || data.action === "salvar_fotos_dossie") {
+      try {
+        var targetFolder = localizarPastaVistoriaDrive(ss, config, data.folderUrl, data.processo || data.numeroProcesso, data.nomeAutor || data.autor, mainFolderId);
+
+        if (!targetFolder) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "erro",
+            message: "Pasta do Google Drive da vistoria não foi localizada. Verifique se a vistoria já foi gravada na planilha oficial."
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+
+        var subfolderResidencia = criarOuObterPasta(targetFolder, "Fotos da Residência");
+        var subfolderMedidor = criarOuObterPasta(targetFolder, "Fotos do Medidor");
+
+        var listaFotos = [];
+        if (data.fotos && Array.isArray(data.fotos)) {
+          listaFotos = data.fotos;
+        } else if (data.base64 || data.foto) {
+          listaFotos = [data.foto || {
+            nome: data.nome || ("foto_" + Date.now() + ".jpg"),
+            base64: data.base64,
+            categoria: data.categoria || "residencia",
+            id: data.id || null
+          }];
+        }
+
+        var arquivosSalvos = [];
+        for (var fIdx = 0; fIdx < listaFotos.length; fIdx++) {
+          var itemFoto = listaFotos[fIdx];
+          var rawB64 = itemFoto.base64 || itemFoto.url || "";
+          if (!rawB64) continue;
+
+          var cleanB64 = rawB64.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, "");
+          var nomeArq = itemFoto.nome || ("foto_" + (fIdx + 1) + ".jpg");
+
+          var catItem = String(itemFoto.categoria || data.categoria || "").toLowerCase();
+          var isMed = (catItem === "medidor" || catItem.indexOf("medid") !== -1 || nomeArq.toLowerCase().indexOf("medidor") !== -1);
+          var pastaDest = isMed ? subfolderMedidor : subfolderResidencia;
+
+          var mimeType = "image/jpeg";
+          if (rawB64.indexOf("data:image/png") !== -1 || nomeArq.match(/\.png$/i)) {
+            mimeType = "image/png";
+          } else if (rawB64.indexOf("data:image/webp") !== -1 || nomeArq.match(/\.webp$/i)) {
+            mimeType = "image/webp";
+          }
+
+          var decodedBytes = Utilities.base64Decode(cleanB64);
+          var blobFoto = Utilities.newBlob(decodedBytes, mimeType, nomeArq);
+          var novoArquivo = pastaDest.createFile(blobFoto);
+
+          try {
+            novoArquivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          } catch (_) {}
+
+          var fileId = novoArquivo.getId();
+          arquivosSalvos.push({
+            clientTempId: itemFoto.id || null,
+            id: fileId,
+            driveId: fileId,
+            name: novoArquivo.getName(),
+            url: novoArquivo.getUrl(),
+            viewUrl: "https://drive.google.com/uc?export=view&id=" + fileId,
+            thumbnailUrl: "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1000",
+            categoria: isMed ? "medidor" : "residencia",
+            folderName: isMed ? "Fotos do Medidor" : "Fotos da Residência"
+          });
+        }
+
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "sucesso",
+          totalSalvos: arquivosSalvos.length,
+          arquivos: arquivosSalvos,
+          folderUrl: targetFolder.getUrl(),
+          folderName: targetFolder.getName(),
+          message: arquivosSalvos.length + " foto(s) enviada(s) para a pasta do Google Drive com sucesso!"
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errUploadFotos) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Erro ao salvar foto(s) na pasta do Drive: " + errUploadFotos.toString()
         })).setMimeType(ContentService.MimeType.JSON);
       }
     }
@@ -1719,11 +1804,101 @@ function salvarFotosBase64(photosArray, targetFolder, prefixo) {
 
 function extrairFolderId(url) {
   if (!url) return null;
-  var str = String(url);
+  var str = String(url).trim();
   var match = str.match(/folders\/([a-zA-Z0-9_-]+)/);
   if (match) return match[1];
   var matchId = str.match(/id=([a-zA-Z0-9_-]+)/);
   if (matchId) return matchId[1];
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(str)) return str;
+  return null;
+}
+
+function localizarPastaVistoriaDrive(ss, config, folderUrl, processo, autor, mainFolderId) {
+  var folderId = extrairFolderId(folderUrl);
+  if (folderId) {
+    try {
+      var folder = DriveApp.getFolderById(folderId);
+      if (folder) return folder;
+    } catch (_) {}
+  }
+
+  var procLimpo = String(processo || "").replace(/[^0-9]/g, "");
+  var autorLimpo = autor ? capitalizarNome(autor).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "") : "";
+
+  // 1. Busca link da pasta gravada na aba Energia da Planilha Oficial
+  if (ss) {
+    try {
+      var sheetEnergia = buscarAbaFlexivel(ss, "Energia") || buscarAbaFlexivel(ss, "Respostas ao formulário 1") || ss.getSheets()[0];
+      if (sheetEnergia) {
+        var dataE = sheetEnergia.getDataRange().getDisplayValues();
+        var headersE = dataE.length > 0 ? dataE[0] : [];
+        var colLink = acharIndiceColuna(headersE, ["linkdapastagoogledrive", "linkdapasta", "pastadrive", "linkdrive"]);
+        if (colLink >= 0 && dataE.length > 1) {
+          for (var i = 1; i < dataE.length; i++) {
+            var r = dataE[i];
+            var rProc = r[2] ? String(r[2]).replace(/[^0-9]/g, "") : "";
+            var rAut = r[1] ? String(r[1]).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "") : "";
+            if ((procLimpo && rProc && rProc === procLimpo) || (autorLimpo && rAut && (rAut.indexOf(autorLimpo) !== -1 || autorLimpo.indexOf(rAut) !== -1))) {
+              var lUrl = r[colLink];
+              var fId = extrairFolderId(lUrl);
+              if (fId) {
+                try {
+                  var f = DriveApp.getFolderById(fId);
+                  if (f) return f;
+                } catch (_) {}
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Busca link da pasta gravada na aba Processos Energia
+    try {
+      var sheetProc = buscarAbaFlexivel(ss, "Processos Energia") || buscarAbaFlexivel(ss, "Processos");
+      if (sheetProc) {
+        var dataP = sheetProc.getDataRange().getDisplayValues();
+        var headersP = dataP.length > 0 ? dataP[0] : [];
+        var colLinkP = acharIndiceColuna(headersP, ["linkdapastadodrive", "pastadodrive", "linkdrive", "link"]);
+        if (colLinkP >= 0 && dataP.length > 1) {
+          for (var j = 1; j < dataP.length; j++) {
+            var rp = dataP[j];
+            var colProcP = acharIndiceColuna(headersP, ["numerodoprocesso", "processo", "cnj"]);
+            var rpProc = colProcP >= 0 && rp[colProcP] ? String(rp[colProcP]).replace(/[^0-9]/g, "") : "";
+            if (procLimpo && rpProc && rpProc === procLimpo) {
+              var lUrlP = rp[colLinkP];
+              var fIdP = extrairFolderId(lUrlP);
+              if (fIdP) {
+                try {
+                  var fP = DriveApp.getFolderById(fIdP);
+                  if (fP) return fP;
+                } catch (_) {}
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 3. Busca pasta pelo nome do autor dentro da pasta raiz do perito
+  var targetMainId = mainFolderId || (config && config.mainFolderId) || "1dIFg4HCfX0C3cG_8WrbFK5PHETt6VUQV";
+  if (targetMainId && autorLimpo && autorLimpo.length > 3) {
+    try {
+      var mainFolder = DriveApp.getFolderById(targetMainId);
+      if (mainFolder) {
+        var subPastas = mainFolder.getFolders();
+        while (subPastas.hasNext()) {
+          var sub = subPastas.next();
+          var sNome = sub.getName().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          if (sNome.indexOf(autorLimpo) !== -1) {
+            return sub;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   return null;
 }
 
