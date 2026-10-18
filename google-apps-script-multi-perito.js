@@ -194,7 +194,7 @@ function doGet(e) {
         var cAutor = acharIndiceColuna(hAntiga, ["nomedoautor", "autor", "parteautora"], ["representacao", "presenca"]);
         if (cAutor < 0) cAutor = 3;
 
-        var cProc = acharIndiceColuna(hAntiga, ["numerodoprocesso", "processo", "cnj"], ["representacao", "presenca"]);
+        var cProc = acharIndiceColuna(hAntiga, ["numerodoprocessocnj", "numerodoprocesso", "numeroprocesso", "numprocesso", "processo", "cnj"], ["representacao", "presenca", "secao", "vincular"]);
         if (cProc < 0) cProc = 4;
 
         var cReu = acharIndiceColuna(hAntiga, ["reuconcessionaria", "concessionaria", "nomedoreu"], ["representacao", "presenca"]);
@@ -292,8 +292,11 @@ function doGet(e) {
             }
           }
 
-          if (!numProcVal.replace(/[^0-9]/g, "") && r[4] && String(r[4]).replace(/[^0-9]/g, "")) {
-            numProcVal = String(r[4]).trim();
+          // Se numProcVal estiver vazio ou com menos de 7 dígitos, tenta da coluna E original (r[4])
+          if (!numProcVal.replace(/[^0-9]/g, "") || numProcVal.replace(/[^0-9]/g, "").length < 7) {
+            if (r[4] && String(r[4]).replace(/[^0-9]/g, "").length >= 7) {
+              numProcVal = String(r[4]).trim();
+            }
           }
 
           var lowerReu = reuVal.toLowerCase();
@@ -330,7 +333,7 @@ function doGet(e) {
             if ((!autorVal || autorVal.length < 3) && preEnc.nomeAutor) {
               autorVal = preEnc.nomeAutor;
             }
-            if (!numProcVal && preEnc.numeroProcesso) {
+            if ((!numProcVal || numProcVal.replace(/[^0-9]/g, "").length < 7) && preEnc.numeroProcesso) {
               numProcVal = preEnc.numeroProcesso;
             }
           }
@@ -1377,7 +1380,7 @@ function buscarAbaFlexivel(ss, nomeDesejado) {
 
 function acharIndiceColuna(headersArray, aliases, exclusions) {
   if (!headersArray || !aliases) return -1;
-  var excluidos = exclusions || [];
+  var excluidos = (exclusions || []).concat(["secao", "seçao", "identificacao", "vincular"]);
 
   // 1. Pass: Correspondência Exata
   for (var i = 0; i < headersArray.length; i++) {
