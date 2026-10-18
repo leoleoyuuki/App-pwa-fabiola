@@ -159,17 +159,26 @@ function doGet(e) {
       
       var sheetProcessosRef = buscarAbaFlexivel(ss, "Processos Energia") || buscarAbaFlexivel(ss, "Processos");
       var mapaProcessos = {};
+      var mapaProcessosPorAutor = {};
       if (sheetProcessosRef) {
         var dataProc = sheetProcessosRef.getDataRange().getDisplayValues();
         if (dataProc.length > 1) {
           var hProc = dataProc[0];
-          var colProcIdx = acharIndiceColuna(hProc, ["numerodoprocessocnj", "numerodoprocesso", "processo", "cnj"]);
+          var colProcIdx = acharIndiceColuna(hProc, ["numerodoprocessocnj", "numerodoprocesso", "processo", "cnj"], ["tipo"]);
+          var colAutorIdx = acharIndiceColuna(hProc, ["nomedoautor", "autor", "parteautora", "requerente"], ["representacao", "advogado", "patrono"]);
           for (var pIdx = 1; pIdx < dataProc.length; pIdx++) {
             var rP = dataProc[pIdx];
             var numP = colProcIdx >= 0 ? String(rP[colProcIdx] || "") : "";
             var digitsP = numP.replace(/[^0-9]/g, "");
+            var autorP = colAutorIdx >= 0 ? String(rP[colAutorIdx] || "").trim() : "";
+            var autorKey = autorP.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+            
+            var procObj = { linhaIndex: pIdx + 1, rowData: rP, headers: hProc, numeroProcesso: numP, nomeAutor: autorP };
             if (digitsP) {
-              mapaProcessos[digitsP] = { linhaIndex: pIdx + 1, rowData: rP, headers: hProc };
+              mapaProcessos[digitsP] = procObj;
+            }
+            if (autorKey && autorKey.length >= 3) {
+              mapaProcessosPorAutor[autorKey] = procObj;
             }
           }
         }
@@ -180,48 +189,150 @@ function doGet(e) {
         var hAntiga = dataAntiga[0];
         
         var cDataHora = acharIndiceColuna(hAntiga, ["carimbodedatahora", "carimbo", "datahora"]);
-        var cAutor = acharIndiceColuna(hAntiga, ["nomedoautor", "autor"]);
-        var cProc = acharIndiceColuna(hAntiga, ["numerodoprocesso", "processo"]);
-        var cReu = acharIndiceColuna(hAntiga, ["reuconcessionaria", "reu", "concessionaria"]);
+        if (cDataHora < 0) cDataHora = 0;
+
+        var cAutor = acharIndiceColuna(hAntiga, ["nomedoautor", "autor", "parteautora"], ["representacao", "presenca"]);
+        if (cAutor < 0) cAutor = 3;
+
+        var cProc = acharIndiceColuna(hAntiga, ["numerodoprocesso", "processo", "cnj"], ["representacao", "presenca"]);
+        if (cProc < 0) cProc = 4;
+
+        var cReu = acharIndiceColuna(hAntiga, ["reuconcessionaria", "concessionaria", "nomedoreu"], ["representacao", "presenca"]);
+        if (cReu < 0) cReu = 5;
+
         var cDataVist = acharIndiceColuna(hAntiga, ["datadavistoria", "datavistoria"]);
+        if (cDataVist < 0) cDataVist = 7;
+
         var cPeriodo = acharIndiceColuna(hAntiga, ["periododavistoria", "periodovistoria"]);
-        var cRepAut = acharIndiceColuna(hAntiga, ["representacaodoautorpresente", "representacaoautorpresente"]);
-        var cRepReu = acharIndiceColuna(hAntiga, ["representacaodoreupresente", "representacaoreupresente"]);
-        var cObsPres = acharIndiceColuna(hAntiga, ["observacoessobrepresencadaspartes", "obspresenca"]);
+        if (cPeriodo < 0) cPeriodo = 8;
+
+        var cRepAut = acharIndiceColuna(hAntiga, ["representacaodoautorpresente", "representacaoautorpresente", "representacaoautor"]);
+        if (cRepAut < 0) cRepAut = 10;
+
+        var cRepReu = acharIndiceColuna(hAntiga, ["representacaodoreupresente", "representacaoreupresente", "representacaoreu"]);
+        if (cRepReu < 0) cRepReu = 11;
+
+        var cObsPres = acharIndiceColuna(hAntiga, ["observacoessobrepresencadaspartes", "obspresenca", "observacoespresenca"]);
+        if (cObsPres < 0) cObsPres = 12;
+
         var cNumMed = acharIndiceColuna(hAntiga, ["numerodomedidor", "medidor"]);
+        if (cNumMed < 0) cNumMed = 14;
+
         var cTipoAcao = acharIndiceColuna(hAntiga, ["tipodeacao", "tipoacao"]);
+        if (cTipoAcao < 0) cTipoAcao = 15;
+
         var cChip = acharIndiceColuna(hAntiga, ["medidorpossuichipsmartcard", "medidorcomchip", "chip"]);
+        if (cChip < 0) cChip = 16;
+
         var cCond = acharIndiceColuna(hAntiga, ["condicoesvisuaisdomedidor", "condicoesdomedidor"]);
+        if (cCond < 0) cCond = 17;
+
         var cPessoas = acharIndiceColuna(hAntiga, ["quantidadedepessoasresidentes", "pessoasresidentes", "qtdpessoas"]);
-        var cComodos = acharIndiceColuna(hAntiga, ["quantidadedecomodos", "quantidadedecomodos", "comodos"]);
+        if (cPessoas < 0) cPessoas = 19;
+
+        var cComodos = acharIndiceColuna(hAntiga, ["quantidadedecomodos", "comodos"]);
+        if (cComodos < 0) cComodos = 20;
+
         var cLamp = acharIndiceColuna(hAntiga, ["ndelampadas", "lampadas"]);
+        if (cLamp < 0) cLamp = 22;
+
         var cTvs = acharIndiceColuna(hAntiga, ["ndetvs", "tvs"]);
+        if (cTvs < 0) cTvs = 23;
+
         var cVent = acharIndiceColuna(hAntiga, ["ndeventiladores", "ventiladores"]);
+        if (cVent < 0) cVent = 24;
+
         var cGel = acharIndiceColuna(hAntiga, ["ndegeladeiras", "geladeiras"]);
+        if (cGel < 0) cGel = 25;
+
         var cCorte = acharIndiceColuna(hAntiga, ["houvecortedeenergia", "cortedeenergia", "corte"]);
+        if (cCorte < 0) cCorte = 26;
+
         var cVentTeto = acharIndiceColuna(hAntiga, ["ndeventiladoresdeteto", "ventiladoresteto"]);
+        if (cVentTeto < 0) cVentTeto = 27;
+
         var cAr = acharIndiceColuna(hAntiga, ["ndearcondicionados", "arcondicionados"]);
+        if (cAr < 0) cAr = 28;
+
         var cFreezer = acharIndiceColuna(hAntiga, ["ndefreezers", "freezers"]);
+        if (cFreezer < 0) cFreezer = 29;
+
         var cChuv = acharIndiceColuna(hAntiga, ["ndechuveiroseletricos", "chuveiros"]);
+        if (cChuv < 0) cChuv = 30;
+
         var cMaq = acharIndiceColuna(hAntiga, ["ndemaquinasdelavarroupa", "maquinasdelavar"]);
+        if (cMaq < 0) cMaq = 31;
+
         var cFotoImovel = acharIndiceColuna(hAntiga, ["fotosdoimovel", "fotosimovel"]);
+        if (cFotoImovel < 0) cFotoImovel = 32;
+
         var cFotoMed = acharIndiceColuna(hAntiga, ["fotosdomedidor", "fotosmedidor"]);
+        if (cFotoMed < 0) cFotoMed = 33;
+
         var cChecklist = acharIndiceColuna(hAntiga, ["checklisttecnico", "checklist"]);
+        if (cChecklist < 0) cChecklist = 34;
+
         var cObsFinais = acharIndiceColuna(hAntiga, ["observacoesfinais", "observacoes"]);
+        if (cObsFinais < 0) cObsFinais = 35;
+
         var cNumVist = acharIndiceColuna(hAntiga, ["ndavistoria", "numerodavistoria"]);
+        if (cNumVist < 0) cNumVist = 38;
 
         for (var i = 1; i < dataAntiga.length; i++) {
           var r = dataAntiga[i];
           var numProcVal = cProc >= 0 ? String(r[cProc] || "").trim() : "";
           var autorVal = cAutor >= 0 ? String(r[cAutor] || "").trim() : "";
+          var reuVal = cReu >= 0 ? String(r[cReu] || "").trim() : "";
+
+          // Auto-correção defensiva caso tenha havido deslocamento
+          var lowerAutor = autorVal.toLowerCase();
+          if (lowerAutor === "sim" || lowerAutor === "nao" || lowerAutor === "não" || lowerAutor.indexOf("justificativa") !== -1 || lowerAutor.indexOf("presente") !== -1 || lowerAutor.indexOf("ausente") !== -1) {
+            if (r[3] && String(r[3]).length > 2) {
+              autorVal = String(r[3]).trim();
+            }
+          }
+
+          if (!numProcVal.replace(/[^0-9]/g, "") && r[4] && String(r[4]).replace(/[^0-9]/g, "")) {
+            numProcVal = String(r[4]).trim();
+          }
+
+          var lowerReu = reuVal.toLowerCase();
+          if (!reuVal || lowerReu === "sim" || lowerReu === "nao" || lowerReu === "não" || lowerReu.indexOf("justificativa") !== -1 || lowerReu.indexOf("presente") !== -1 || lowerReu.indexOf("ausente") !== -1) {
+            if (r[5] && String(r[5]).trim()) {
+              reuVal = String(r[5]).trim();
+            } else {
+              reuVal = "ENEL / AMPLA ENERGIA E SERVIÇOS S.A.";
+            }
+          }
+
           if (!numProcVal && !autorVal) continue;
 
           var digits = numProcVal.replace(/[^0-9]/g, "");
+          var autorKey = autorVal.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
           var preEnc = digits ? mapaProcessos[digits] : null;
+
+          if (!preEnc && autorKey) {
+            if (mapaProcessosPorAutor[autorKey]) {
+              preEnc = mapaProcessosPorAutor[autorKey];
+            } else {
+              for (var ak in mapaProcessosPorAutor) {
+                if (ak.indexOf(autorKey) !== -1 || autorKey.indexOf(ak) !== -1) {
+                  preEnc = mapaProcessosPorAutor[ak];
+                  break;
+                }
+              }
+            }
+          }
 
           var dadosPre = null;
           if (preEnc) {
-            dadosPre = extrairDadosPreVistoriaDinamico(sheetProcessosRef, numProcVal, autorVal, cDataVist >= 0 ? r[cDataVist] : "");
+            dadosPre = extrairDadosPreVistoriaDinamico(sheetProcessosRef, numProcVal || preEnc.numeroProcesso, autorVal || preEnc.nomeAutor, cDataVist >= 0 ? r[cDataVist] : "");
+            if ((!autorVal || autorVal.length < 3) && preEnc.nomeAutor) {
+              autorVal = preEnc.nomeAutor;
+            }
+            if (!numProcVal && preEnc.numeroProcesso) {
+              numProcVal = preEnc.numeroProcesso;
+            }
           }
 
           vistoriasAntigas.push({
@@ -230,7 +341,7 @@ function doGet(e) {
             dataEnvio: cDataHora >= 0 ? String(r[cDataHora] || "") : "",
             nomeAutor: autorVal,
             numeroProcesso: numProcVal,
-            reuConcessionaria: cReu >= 0 ? String(r[cReu] || "") : "AMPLA ENERGIA E SERVIÇOS S.A.",
+            reuConcessionaria: reuVal || "AMPLA ENERGIA E SERVIÇOS S.A.",
             tipoAcao: cTipoAcao >= 0 ? String(r[cTipoAcao] || "Consumo") : "Consumo",
             dataVistoria: cDataVist >= 0 ? String(r[cDataVist] || "") : "",
             numeroVistoria: cNumVist >= 0 ? String(r[cNumVist] || "1") : "1",
@@ -287,11 +398,14 @@ function doGet(e) {
         if (linhaAlvo > 1 && linhaAlvo <= linhasAntigas.length) {
           linhaEncontrada = linhasAntigas[linhaAlvo - 1];
         } else if (procAlvo || autorAlvo) {
+          var procAlvoDig = procAlvo.replace(/[^0-9]/g, "");
+          var autorAlvoLimpo = autorAlvo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
           for (var li = 1; li < linhasAntigas.length; li++) {
             var rLinha = linhasAntigas[li];
-            var procLinha = rLinha[4] || "";
-            var autorLinha = rLinha[3] || "";
-            if ((procAlvo && procLinha.indexOf(procAlvo) !== -1) || (autorAlvo && autorLinha.toLowerCase().indexOf(autorAlvo.toLowerCase()) !== -1)) {
+            var procLinha = String(rLinha[4] || "");
+            var procLinhaDig = procLinha.replace(/[^0-9]/g, "");
+            var autorLinha = String(rLinha[3] || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+            if ((procAlvoDig && procLinhaDig && procLinhaDig === procAlvoDig) || (autorAlvoLimpo && autorLinha && (autorLinha.indexOf(autorAlvoLimpo) !== -1 || autorAlvoLimpo.indexOf(autorLinha) !== -1))) {
               linhaEncontrada = rLinha;
               break;
             }
@@ -305,11 +419,29 @@ function doGet(e) {
           })).setMimeType(ContentService.MimeType.JSON);
         }
 
+        var nomeAutorExt = linhaEncontrada[3] || "";
+        var numProcExt = linhaEncontrada[4] || "";
+        var reuExt = linhaEncontrada[5] || "";
+
+        var lowerAut = String(nomeAutorExt).toLowerCase();
+        if (!nomeAutorExt || lowerAut === "sim" || lowerAut === "nao" || lowerAut === "não" || lowerAut.indexOf("justificativa") !== -1 || lowerAut.indexOf("presente") !== -1 || lowerAut.indexOf("ausente") !== -1) {
+          if (autorAlvo && autorAlvo.length > 2) {
+            nomeAutorExt = autorAlvo;
+          }
+        }
+        if (!String(numProcExt).replace(/[^0-9]/g, "") && procAlvo) {
+          numProcExt = procAlvo;
+        }
+        var lowerReu = String(reuExt).toLowerCase();
+        if (!reuExt || lowerReu === "sim" || lowerReu === "nao" || lowerReu === "não" || lowerReu.indexOf("justificativa") !== -1 || lowerReu.indexOf("presente") !== -1 || lowerReu.indexOf("ausente") !== -1) {
+          reuExt = "ENEL / AMPLA ENERGIA E SERVIÇOS S.A.";
+        }
+
         var objVistoria = {
           dataEnvio: linhaEncontrada[0] || "",
-          nomeAutor: linhaEncontrada[3] || "",
-          numeroProcesso: linhaEncontrada[4] || "",
-          reuConcessionaria: linhaEncontrada[5] || "",
+          nomeAutor: nomeAutorExt,
+          numeroProcesso: numProcExt,
+          reuConcessionaria: reuExt,
           tipoAcao: linhaEncontrada[15] || "Consumo",
           dataVistoria: linhaEncontrada[7] || "",
           numeroVistoria: linhaEncontrada[38] || "1",
@@ -689,8 +821,34 @@ function doPost(e) {
         var vistoriaObj = data.vistoria || data;
         var sheetEnergia = buscarAbaFlexivel(ss, "Energia") || buscarAbaFlexivel(ss, "Respostas ao formulário 1") || ss.getSheets()[0];
         
-        var autorCapitalizado = capitalizarNome(vistoriaObj.nomeAutor || "Autor Sem Nome");
-        var numProc = vistoriaObj.numeroProcesso || "";
+        var autorBruto = String(vistoriaObj.nomeAutor || "").trim();
+        var lowerAut = autorBruto.toLowerCase();
+        if (!autorBruto || lowerAut === "sim" || lowerAut === "nao" || lowerAut === "não" || lowerAut.indexOf("justificativa") !== -1 || lowerAut.indexOf("presente") !== -1 || lowerAut.indexOf("ausente") !== -1) {
+          if (vistoriaObj.preVistoria && vistoriaObj.preVistoria.nomeAutor) {
+            autorBruto = vistoriaObj.preVistoria.nomeAutor;
+          }
+        }
+
+        var numProc = String(vistoriaObj.numeroProcesso || "").trim();
+        if (!numProc.replace(/[^0-9]/g, "") && vistoriaObj.preVistoria && vistoriaObj.preVistoria.numeroProcesso) {
+          numProc = vistoriaObj.preVistoria.numeroProcesso;
+        }
+
+        var reuBruto = String(vistoriaObj.reuConcessionaria || "").trim();
+        var lowerReu = reuBruto.toLowerCase();
+        if (!reuBruto || lowerReu === "sim" || lowerReu === "nao" || lowerReu === "não" || lowerReu === "concessionária ré" || lowerReu === "concessionaria re") {
+          if (vistoriaObj.preVistoria && vistoriaObj.preVistoria.nomeReu) {
+            reuBruto = vistoriaObj.preVistoria.nomeReu;
+          } else {
+            reuBruto = "ENEL / AMPLA ENERGIA E SERVIÇOS S.A.";
+          }
+        }
+
+        vistoriaObj.nomeAutor = autorBruto || "Autor Não Identificado";
+        vistoriaObj.numeroProcesso = numProc;
+        vistoriaObj.reuConcessionaria = reuBruto;
+
+        var autorCapitalizado = capitalizarNome(vistoriaObj.nomeAutor);
         var dataVist = vistoriaObj.dataVistoria || "";
 
         // Verifica duplicidade
@@ -1217,14 +1375,52 @@ function buscarAbaFlexivel(ss, nomeDesejado) {
   return null;
 }
 
-function acharIndiceColuna(headersArray, aliases) {
+function acharIndiceColuna(headersArray, aliases, exclusions) {
+  if (!headersArray || !aliases) return -1;
+  var excluidos = exclusions || [];
+
+  // 1. Pass: Correspondência Exata
   for (var i = 0; i < headersArray.length; i++) {
     var hLimpo = String(headersArray[i] || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    if (!hLimpo) continue;
+
+    var ehExcluido = false;
+    for (var e = 0; e < excluidos.length; e++) {
+      var eLimpo = excluidos[e].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      if (hLimpo.indexOf(eLimpo) !== -1) {
+        ehExcluido = true;
+        break;
+      }
+    }
+    if (ehExcluido) continue;
+
     for (var a = 0; a < aliases.length; a++) {
       var aLimpo = aliases[a].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-      if (hLimpo === aLimpo || hLimpo.indexOf(aLimpo) !== -1 || aLimpo.indexOf(hLimpo) !== -1) return i;
+      if (hLimpo === aLimpo) return i;
     }
   }
+
+  // 2. Pass: Começa com alias ou contém alias de pelo menos 4 caracteres (sem estar nos excluídos)
+  for (var i = 0; i < headersArray.length; i++) {
+    var hLimpo = String(headersArray[i] || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    if (!hLimpo) continue;
+
+    var ehExcluido = false;
+    for (var e = 0; e < excluidos.length; e++) {
+      var eLimpo = excluidos[e].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      if (hLimpo.indexOf(eLimpo) !== -1) {
+        ehExcluido = true;
+        break;
+      }
+    }
+    if (ehExcluido) continue;
+
+    for (var a = 0; a < aliases.length; a++) {
+      var aLimpo = aliases[a].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      if (aLimpo.length >= 4 && hLimpo.indexOf(aLimpo) !== -1) return i;
+    }
+  }
+
   return -1;
 }
 
