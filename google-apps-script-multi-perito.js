@@ -475,23 +475,8 @@ function doGet(e) {
         var autorCap = capitalizarNome(objVistoria.nomeAutor || "Autor Sem Nome");
         var numProcLimpo = objVistoria.numeroProcesso || "";
 
-        if (isRegistroDuplicado(sheetEnergia, numProcLimpo, autorCap, objVistoria.dataVistoria)) {
-          return ContentService.createTextOutput(JSON.stringify({
-            status: "sucesso",
-            duplicado: true,
-            message: "Esta vistoria (" + autorCap + ") já está gravada na aba Energia.",
-            processo: numProcLimpo
-          })).setMimeType(ContentService.MimeType.JSON);
-        }
-
-        gravarLinhaVistoriaDinamica(sheetEnergia, objVistoria, autorCap, "", "");
-
-        return ContentService.createTextOutput(JSON.stringify({
-          status: "sucesso",
-          gravado: true,
-          message: "Vistoria de " + autorCap + " gravada com sucesso na aba Energia!",
-          processo: numProcLimpo
-        })).setMimeType(ContentService.MimeType.JSON);
+        var resultado = processarMigracaoVistoriaLegadaCompleta(ss, config, objVistoria, autorCap, numProcLimpo, params.mainFolderId);
+        return ContentService.createTextOutput(JSON.stringify(resultado)).setMimeType(ContentService.MimeType.JSON);
       } catch (errMigSingle) {
         return ContentService.createTextOutput(JSON.stringify({
           status: "erro",
@@ -852,27 +837,8 @@ function doPost(e) {
         vistoriaObj.reuConcessionaria = reuBruto;
 
         var autorCapitalizado = capitalizarNome(vistoriaObj.nomeAutor);
-        var dataVist = vistoriaObj.dataVistoria || "";
-
-        // Verifica duplicidade
-        if (isRegistroDuplicado(sheetEnergia, numProc, autorCapitalizado, dataVist)) {
-          return ContentService.createTextOutput(JSON.stringify({
-            status: "sucesso",
-            duplicado: true,
-            message: "Esta vistoria já se encontra gravada na planilha principal.",
-            processo: numProc
-          })).setMimeType(ContentService.MimeType.JSON);
-        }
-
-        // Grava na planilha principal reorganizando exatamente nas 30 colunas oficiais
-        gravarLinhaVistoriaDinamica(sheetEnergia, vistoriaObj, autorCapitalizado, vistoriaObj.linkDrive || "", "");
-
-        return ContentService.createTextOutput(JSON.stringify({
-          status: "sucesso",
-          gravado: true,
-          message: "Vistoria da planilha antiga gravada com sucesso na planilha oficial do perito!",
-          processo: numProc
-        })).setMimeType(ContentService.MimeType.JSON);
+        var resultadoPost = processarMigracaoVistoriaLegadaCompleta(ss, config, vistoriaObj, autorCapitalizado, numProc, mainFolderId);
+        return ContentService.createTextOutput(JSON.stringify(resultadoPost)).setMimeType(ContentService.MimeType.JSON);
       } catch (errMig) {
         return ContentService.createTextOutput(JSON.stringify({
           status: "erro",
@@ -1347,6 +1313,164 @@ function gravarLinhaVistoriaDinamica(sheet, data, nomeAutor, inspectionFolderUrl
 
   sheet.appendRow(novaLinha);
   return sheet.getLastRow();
+}
+
+/**
+ * Executa a migração completa e oficial da vistoria legada:
+ * 1. Cria a pasta da vistoria no Google Drive do Perito com subpastas Fotos da Residência e Fotos do Medidor
+ * 2. Grava ou atualiza a linha na aba Energia da Planilha Oficial com o link da pasta do Drive
+ * 3. Cruza com Processos Energia e dispara requisição ao microserviço para responder quesitos com Gemini
+ * 4. Salva dados.tex e historico_consumo.csv na pasta do Drive
+ * 5. Atualiza o status em Processos Energia para "Vistoriado"
+ */
+function processarMigracaoVistoriaLegadaCompleta(ss, config, objVistoria, autorCap, numProcLimpo, mainFolderId) {
+  // 1. Cria ou localiza a pasta no Google Drive oficial do perito
+  var targetMainFolderId = mainFolderId || (config && config.mainFolderId) || "1dIFg4HCfX0C3cG_8WrbFK5PHETt6VUQV";
+  var mainFolder = DriveApp.getFolderById(targetMainFolderId);
+
+  var dataVistFormatada = "";
+  if (objVistoria.dataVistoria) {
+    var pD = objVistoria.dataVistoria.toString().split("-");
+    if (pD.length === 3) {
+      dataVistFormatada = pD[2] + "-" + pD[1] + "-" + pD[0];
+    } else {
+      dataVistFormatada = objVistoria.dataVistoria.toString().split("/").join("-");
+    }
+  }
+
+  var numVistStr = (objVistoria.numeroVistoria && String(objVistoria.numeroVistoria) !== "1") ? (" - Vistoria " + objVistoria.numeroVistoria) : "";
+  var pastaVistoriaNome = dataVistFormatada ? (dataVistFormatada + " - " + autorCap + numVistStr) : (autorCap + numVistStr);
+
+  var inspectionFolder = null;
+  var pastasEx = mainFolder.getFoldersByName(pastaVistoriaNome);
+  if (pastasEx.hasNext()) {
+    inspectionFolder = pastasEx.next();
+  } else {
+    inspectionFolder = criarPastaVistoriaComVersionamento(mainFolder, pastaVistoriaNome);
+  }
+
+  // Cria subpastas para que o usuário possa subir fotos pelo dossiê / Drive
+  var subfolderImovel = criarOuObterPasta(inspectionFolder, "Fotos da Residência");
+  var subfolderMedidor = criarOuObterPasta(inspectionFolder, "Fotos do Medidor");
+  var folderUrl = inspectionFolder.getUrl();
+  var folderId = inspectionFolder.getId();
+  objVistoria.linkDrive = folderUrl;
+
+  // 2. Grava ou atualiza a linha na aba Energia da Planilha Oficial
+  var sheetEnergia = buscarAbaFlexivel(ss, "Energia") || buscarAbaFlexivel(ss, "Respostas ao formulário 1") || ss.getSheets()[0];
+  var dataEnergia = sheetEnergia.getDataRange().getDisplayValues();
+  var headersEnergia = dataEnergia.length > 0 ? dataEnergia[0] : [];
+  var colLinkDrive = acharIndiceColuna(headersEnergia, ["linkdapastagoogledrive", "linkdapasta", "pastadrive", "linkdrive"]);
+  var linhaExistente = -1;
+
+  var procDig = numProcLimpo.replace(/[^0-9]/g, "");
+  var autLimpo = autorCap.toLowerCase().trim();
+
+  if (dataEnergia.length > 1) {
+    for (var eI = 1; eI < dataEnergia.length; eI++) {
+      var rE = dataEnergia[eI];
+      var rAut = rE[1] ? String(rE[1]).toLowerCase().trim() : "";
+      var rProc = rE[2] ? String(rE[2]).replace(/[^0-9]/g, "") : "";
+      if ((procDig && rProc && procDig === rProc) || (autLimpo && rAut && autLimpo === rAut)) {
+        linhaExistente = eI + 1;
+        break;
+      }
+    }
+  }
+
+  if (linhaExistente > 0) {
+    if (colLinkDrive >= 0) {
+      sheetEnergia.getRange(linhaExistente, colLinkDrive + 1).setValue(folderUrl);
+    }
+  } else {
+    gravarLinhaVistoriaDinamica(sheetEnergia, objVistoria, autorCap, folderUrl, "");
+  }
+  SpreadsheetApp.flush();
+
+  // 3. Cruzamento com a aba Processos Energia e Chamada ao Microserviço para Responder Quesitos
+  var sheetProcessosRef = buscarAbaFlexivel(ss, "Processos Energia") || buscarAbaFlexivel(ss, "Processos");
+  var extraido = null;
+  if (sheetProcessosRef) {
+    extraido = extrairDadosPreVistoriaDinamico(sheetProcessosRef, numProcLimpo, autorCap, objVistoria.dataVistoria);
+  }
+
+  var respostasQuesitos = {
+    quesitosDoJuizo: (extraido && extraido.dados && extraido.dados.quesitosJuizo) || "",
+    quesitosDoAutor: (extraido && extraido.dados && extraido.dados.quesitosAutor) || "",
+    quesitosDoReu: (extraido && extraido.dados && extraido.dados.quesitosReu) || ""
+  };
+
+  var jsonQ = null;
+  if (extraido && extraido.dados) {
+    var dadosProc = Object.assign({
+      peritoNome: config.nome,
+      peritoTituloLinhaA: config.tituloLinhaA,
+      peritoTituloLinhaB: config.tituloLinhaB,
+      peritoRegistroRotulo: config.registroRotulo,
+      peritoRegistroNumero: config.registroNumero,
+      peritoTelefone: config.telefone,
+      peritoEmail: config.email,
+      nomeAutor: autorCap,
+      numeroProcesso: numProcLimpo,
+      reuConcessionaria: objVistoria.reuConcessionaria || "",
+      tipoAcao: objVistoria.tipoAcao || "Consumo"
+    }, extraido.dados);
+
+    // Chama o microserviço para responder quesitos com Gemini
+    try {
+      try { UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/health", { muteHttpExceptions: true }); } catch (eW) {}
+
+      var payloadQ = {
+        processo: dadosProc,
+        vistoria: objVistoria,
+        parte: "tudo"
+      };
+      var respQ = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify(payloadQ),
+        muteHttpExceptions: true
+      });
+      jsonQ = JSON.parse(respQ.getContentText());
+      if (jsonQ && jsonQ.respostas) {
+        respostasQuesitos = jsonQ.respostas;
+      }
+      if (jsonQ && jsonQ.dadosTex && !inspectionFolder.getFilesByName("dados.tex").hasNext()) {
+        inspectionFolder.createFile(Utilities.newBlob(jsonQ.dadosTex, "text/plain; charset=utf-8", "dados.tex"));
+      }
+      if (jsonQ && jsonQ.historicoCsv && !inspectionFolder.getFilesByName("historico_consumo.csv").hasNext()) {
+        inspectionFolder.createFile(Utilities.newBlob(jsonQ.historicoCsv, "text/csv; charset=utf-8", "historico_consumo.csv"));
+      }
+    } catch (errQ) {
+      console.warn("Aviso ao responder quesitos no microserviço:", errQ.toString());
+    }
+
+    // Salva historico_consumo.csv se houver na pré-vistoria e ainda não estiver salvo na pasta
+    if (extraido.dados.historicoConsumoCsv && !inspectionFolder.getFilesByName("historico_consumo.csv").hasNext()) {
+      inspectionFolder.createFile(Utilities.newBlob(extraido.dados.historicoConsumoCsv, "text/csv; charset=utf-8", "historico_consumo.csv"));
+    }
+
+    // Atualiza status e link da pasta na aba Processos Energia para Vistoriado
+    if (extraido.linhaIndex > 0 && extraido.colunaStatus > 0) {
+      sheetProcessosRef.getRange(extraido.linhaIndex, extraido.colunaStatus).setValue("Vistoriado");
+    }
+    if (extraido.linhaIndex > 0 && extraido.colunaLink > 0) {
+      sheetProcessosRef.getRange(extraido.linhaIndex, extraido.colunaLink).setValue(folderUrl);
+    }
+  }
+
+  return {
+    status: "sucesso",
+    gravado: true,
+    folderUrl: folderUrl,
+    folderId: folderId,
+    respostasQuesitos: respostasQuesitos,
+    preVistoria: extraido ? extraido.dados : null,
+    dadosTex: jsonQ ? jsonQ.dadosTex : null,
+    historicoCsv: jsonQ ? jsonQ.historicoCsv : null,
+    message: "Vistoria gravada na aba Energia, pasta criada no Drive e quesitos respondidos pela IA!",
+    processo: numProcLimpo
+  };
 }
 
 /**
