@@ -649,6 +649,8 @@ function doGet(e) {
             }
           }
           if (temDado) {
+            item.linhaIndex = r + 1;
+            item.dataEnvio = item["Data de Envio"] || item["DatadeEnvio"] || item["datadeenvio"] || item["Carimbo de data/hora"] || "";
             relatorios.push(item);
           }
         }
