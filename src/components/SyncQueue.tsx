@@ -48,6 +48,7 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
   const [isEditingWebhook, setIsEditingWebhook] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [currentSyncId, setCurrentSyncId] = useState<string | null>(null);
+  const [currentSyncLabel, setCurrentSyncLabel] = useState<string>('');
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -90,10 +91,13 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
     setDiagnostic(null);
     setSuccessMsg(null);
 
-    let hasError = false;
+    const itemsToSync = [...queue];
+    let syncedCount = 0;
+    const failedAuthors: string[] = [];
 
     // Sync items one by one (FIFO)
-    for (const inspection of queue) {
+    for (let idx = 0; idx < itemsToSync.length; idx++) {
+      const inspection = itemsToSync[idx];
       // Prevent duplicate syncing of the exact same inspection ID
       if (inFlightIdsRef.current.has(inspection.id)) {
         continue;
@@ -101,7 +105,17 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
 
       inFlightIdsRef.current.add(inspection.id);
       setCurrentSyncId(inspection.id);
-      setSyncProgress({ loaded: 0, total: 0, percentage: 0 });
+      setCurrentSyncLabel(
+        itemsToSync.length > 1
+          ? `(${idx + 1}/${itemsToSync.length}) ${inspection.nomeAutor}`
+          : inspection.nomeAutor
+      );
+      setSyncProgress({
+        loaded: 0,
+        total: 0,
+        percentage: 0,
+        statusText: 'Preparando fotos para envio...'
+      });
 
       try {
         await syncInspection(inspection, webhookUrl, (progress) => {
@@ -112,10 +126,22 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
         await db.addToHistory(inspection);
         // Remove from queue
         await db.removeFromQueue(inspection.id);
+        syncedCount++;
         
         refreshData();
+
+        // Pausa de segurança entre vistorias consecutivas para liberar o servidor
+        if (idx < itemsToSync.length - 1) {
+          setSyncProgress({
+            loaded: 2,
+            total: 2,
+            percentage: 100,
+            statusText: 'Iniciando próxima vistoria da fila...'
+          });
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+        }
       } catch (err: any) {
-        hasError = true;
+        failedAuthors.push(inspection.nomeAutor);
         const diag = parseSyncError(
           err,
           inspection.nomeAutor,
@@ -124,7 +150,10 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
         );
         setDiagnostic(diag);
         setErrorMsg(`Falha ao enviar "${inspection.nomeAutor}": ${err.message || err}`);
-        break; // Stop sync queue on error
+        // Continua sincronizando as demais vistorias da fila em vez de abortar tudo
+        if (idx < itemsToSync.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
       } finally {
         inFlightIdsRef.current.delete(inspection.id);
       }
@@ -133,10 +162,19 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
     setIsSyncing(false);
     isSyncingRef.current = false;
     setCurrentSyncId(null);
+    setCurrentSyncLabel('');
     setSyncProgress(null);
     
-    if (!hasError) {
-      setSuccessMsg('Sincronização concluída com sucesso!');
+    if (failedAuthors.length === 0) {
+      setSuccessMsg(
+        syncedCount > 1
+          ? `Sincronização concluída! Todas as ${syncedCount} vistorias e seus laudos foram gerados com sucesso.`
+          : 'Sincronização concluída com sucesso!'
+      );
+    } else if (syncedCount > 0) {
+      setSuccessMsg(
+        `${syncedCount} vistoria(s) sincronizada(s) com sucesso. ${failedAuthors.length} permanece(m) na fila para reenvio.`
+      );
     }
   };
 
@@ -166,16 +204,6 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
       await db.removeFromQueue(id);
       refreshData();
     }
-  };
-
-  // Convert bytes to readable formats
-  const formatBytes = (bytes: number, decimals = 1) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   };
 
   return (
@@ -380,12 +408,18 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
               border: '1px solid var(--accent-gold)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
               <Loader2 size={16} className="spin" style={{ color: 'var(--accent-gold)' }} />
               <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>
-                Enviando relatório: {queue.find(item => item.id === currentSyncId)?.nomeAutor}...
+                Enviando relatório: {currentSyncLabel || queue.find(item => item.id === currentSyncId)?.nomeAutor}...
               </span>
             </div>
+
+            {syncProgress.statusText && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                {syncProgress.statusText}
+              </div>
+            )}
             
             <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden', marginBottom: '8px' }}>
               <div 
@@ -400,9 +434,9 @@ export const SyncQueue: React.FC<SyncQueueProps> = ({
 
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
               <span>{syncProgress.percentage}% concluído</span>
-              {syncProgress.total > 0 && (
+              {syncProgress.total > 2 && (
                 <span>
-                  {formatBytes(syncProgress.loaded)} / {formatBytes(syncProgress.total)}
+                  {syncProgress.loaded} / {syncProgress.total} fotos processadas
                 </span>
               )}
             </div>

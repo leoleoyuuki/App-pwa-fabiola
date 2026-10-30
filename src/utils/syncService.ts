@@ -4,7 +4,10 @@ export interface SyncProgress {
   loaded: number;
   total: number;
   percentage: number;
+  statusText?: string;
 }
+
+const waitMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Converts a Blob file to a base64 DataURL string.
@@ -212,49 +215,124 @@ export async function syncInspection(
       photosMedidor: photosMedidorWithBase64
     };
 
-    onProgress({ loaded: 1, total: 2, percentage: 60 });
+    onProgress({
+      loaded: 1,
+      total: 2,
+      percentage: 60,
+      statusText: 'Enviando fotos e gerando laudo oficial...'
+    });
 
-    try {
-      // First try standard fetch with text/plain
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
+    const serializedPayload = JSON.stringify(payload);
+    const maxAttempts = 6;
 
-      if (response.ok) {
-        onProgress({ loaded: 2, total: 2, percentage: 100 });
-        try {
-          const resData = await response.json();
-          if (resData && resData.status === 'erro') {
-            throw new Error(`Erro no Script: ${resData.message}`);
-          }
-        } catch (jsonErr: any) {
-          if (jsonErr.message && jsonErr.message.startsWith('Erro no Script:')) {
-            throw jsonErr;
-          }
-        }
-        return;
-      }
-      throw new Error(`Status ${response.status}`);
-    } catch (fetchErr: any) {
-      if (fetchErr.message && fetchErr.message.startsWith('Erro no Script:')) {
-        throw fetchErr;
-      }
-      
-      // If standard fetch failed due to iOS / Safari CORS redirect restrictions (302 redirect to googleusercontent),
-      // fallback to mode: 'no-cors' which bypasses Safari's redirect block reliably
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const attemptStartMs = Date.now();
       try {
-        await fetch(webhookUrl, {
+        // Standard fetch with text/plain
+        const response = await fetch(webhookUrl, {
           method: 'POST',
-          mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
+          body: serializedPayload
         });
-        onProgress({ loaded: 2, total: 2, percentage: 100 });
-        return;
-      } catch (noCorsErr: any) {
-        throw new Error(fetchErr.message || 'Falha de conexão com o Google Apps Script.');
+
+        if (response.ok) {
+          let resData: any = null;
+          try {
+            resData = await response.json();
+          } catch (_) {
+            // Non-JSON 200 OK response is treated as success
+          }
+
+          if (resData && resData.status === 'erro') {
+            const rawErrMsg = String(resData.message || '');
+            const lowerErr = rawErrMsg.toLowerCase();
+            const isServerBusy =
+              lowerErr.includes('ocupado') ||
+              lowerErr.includes('outro laudo') ||
+              lowerErr.includes('tente novamente') ||
+              lowerErr.includes('lock') ||
+              lowerErr.includes('timeout');
+
+            if (isServerBusy && attempt < maxAttempts) {
+              const backoffMs = 8000 + attempt * 4000; // 12s, 16s, 20s, 24s, 28s
+              onProgress({
+                loaded: 1,
+                total: 2,
+                percentage: Math.min(92, 62 + attempt * 6),
+                statusText: `Aguardando fila do servidor finalizar laudo anterior (tentativa ${attempt + 1}/${maxAttempts})...`
+              });
+              await waitMs(backoffMs);
+              continue;
+            }
+
+            throw new Error(`Erro no Script: ${rawErrMsg}`);
+          }
+
+          onProgress({ loaded: 2, total: 2, percentage: 100, statusText: 'Concluído!' });
+          return;
+        }
+
+        if ((response.status === 429 || response.status >= 500) && attempt < maxAttempts) {
+          const backoffMs = 6000 + attempt * 3000;
+          onProgress({
+            loaded: 1,
+            total: 2,
+            percentage: Math.min(90, 60 + attempt * 5),
+            statusText: `Servidor ocupado (HTTP ${response.status}). Retentando (${attempt + 1}/${maxAttempts})...`
+          });
+          await waitMs(backoffMs);
+          continue;
+        }
+
+        throw new Error(`Status ${response.status}`);
+      } catch (fetchErr: any) {
+        if (fetchErr.message && fetchErr.message.startsWith('Erro no Script:')) {
+          throw fetchErr;
+        }
+
+        const elapsedMs = Date.now() - attemptStartMs;
+
+        // No iOS Safari, quando o Google Apps Script leva >18s processando fotos + IA + PDF
+        // e responde com redirect 302 para script.googleusercontent.com, o Safari frequentemente
+        // interrompe a leitura do redirect com "TypeError: Load failed" mesmo tendo processado tudo.
+        // Nesses casos (elapsedMs >= 18000), NÃO devemos disparar um segundo POST duplicado!
+        if (elapsedMs >= 18000) {
+          onProgress({
+            loaded: 2,
+            total: 2,
+            percentage: 95,
+            statusText: 'Finalizando processamento no servidor...'
+          });
+          await waitMs(6000);
+          onProgress({ loaded: 2, total: 2, percentage: 100, statusText: 'Concluído!' });
+          return;
+        }
+
+        // Se falhou rapidamente (< 18s) por restrição de CORS/redirect do navegador,
+        // usa fallback mode: 'no-cors' e aguarda o tempo de processamento antes de liberar a fila.
+        try {
+          await fetch(webhookUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: serializedPayload
+          });
+          onProgress({
+            loaded: 2,
+            total: 2,
+            percentage: 90,
+            statusText: 'Processando laudo no servidor...'
+          });
+          await waitMs(12000);
+          onProgress({ loaded: 2, total: 2, percentage: 100, statusText: 'Concluído!' });
+          return;
+        } catch (noCorsErr: any) {
+          if (attempt < maxAttempts) {
+            await waitMs(5000);
+            continue;
+          }
+          throw new Error(fetchErr.message || 'Falha de conexão com o Google Apps Script.');
+        }
       }
     }
   }

@@ -668,21 +668,34 @@ function doGet(e) {
 }
 
 /**
+ * Executa apenas a escrita rápida na Planilha sob Lock granular (~0.3s),
+ * evitando travar uploads do Drive, chamadas Gemini ou compilação LaTeX.
+ */
+function executarComLockPlanilha(operacaoFn) {
+  var lock = LockService.getScriptLock();
+  var obteveLock = false;
+  try {
+    obteveLock = lock.tryLock(15000);
+  } catch (eLock) {}
+  try {
+    var resultado = operacaoFn();
+    SpreadsheetApp.flush();
+    return resultado;
+  } finally {
+    if (obteveLock) {
+      try {
+        lock.releaseLock();
+      } catch (eRel) {}
+    }
+  }
+}
+
+/**
  * =========================================================================
  * ENDPOINT POST: Gravação de Vistorias + Automação de Laudo Oficial
  * =========================================================================
  */
 function doPost(e) {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(30000);
-  } catch (e) {
-    return ContentService.createTextOutput(JSON.stringify({ 
-      status: "erro", 
-      message: "O servidor está ocupado processando outro laudo. Tente novamente em alguns segundos." 
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
   try {
     if (!e || !e.postData || !e.postData.contents) {
       return ContentService.createTextOutput(JSON.stringify({ 
@@ -938,20 +951,21 @@ function doPost(e) {
     var nomeAutorOriginal = data.nomeAutor || "Autor Sem Nome";
     var nomeAutor = capitalizarNome(nomeAutorOriginal);
     
-    // 🛡️ CAMADA 1: PREVENÇÃO CONTRA DUPLO CLIQUE ACIDENTAL (5 segundos por ID único de requisição)
+    // 🛡️ CAMADA 1: PREVENÇÃO CONTRA DUPLICIDADE DE REQUISIÇÃO (180s durante processamento + 600s pós-conclusão)
     var cache = CacheService.getScriptCache();
     var idInspecao = data.id ? String(data.id) : (nomeAutor + "_" + (data.numeroProcesso || "") + "_" + (data.dataVistoria || "") + "_" + (data.numeroVistoria || "1") + "_" + Date.now());
     var cacheKey = "proc_" + idInspecao.replace(/[^a-zA-Z0-9_]/g, "");
+    var statusCache = cache.get(cacheKey);
 
-    if (cache.get(cacheKey) === "processando") {
+    if (statusCache === "processando" || statusCache === "concluido") {
       return ContentService.createTextOutput(JSON.stringify({ 
         status: "sucesso", 
-        message: "Uma requisição idêntica já está sendo processada no momento.",
+        message: "Esta vistoria já está sendo processada ou já foi sincronizada com sucesso.",
         perito: config.nome,
         duplicatePrevented: true
       })).setMimeType(ContentService.MimeType.JSON);
     }
-    cache.put(cacheKey, "processando", 5);
+    cache.put(cacheKey, "processando", 180);
     
     // 1. Cria nova pasta no Google Drive do Perito com versionamento, data e número da vistoria
     var targetMainFolderId = mainFolderId || (config && config.mainFolderId) || "1dIFg4HCfX0C3cG_8WrbFK5PHETt6VUQV";
@@ -970,11 +984,12 @@ function doPost(e) {
     var numVistoriaStr = (data.numeroVistoria && String(data.numeroVistoria) !== "1") ? (" - Vistoria " + data.numeroVistoria) : "";
     var pastaVistoriaNome = dataVistoriaFormatada ? (dataVistoriaFormatada + " - " + nomeAutor + numVistoriaStr) : (nomeAutor + numVistoriaStr);
     var inspectionFolder = criarPastaVistoriaComVersionamento(mainFolder, pastaVistoriaNome);
+    var inspectionFolderUrl = inspectionFolder.getUrl();
     
     var subfolderImovel = criarOuObterPasta(inspectionFolder, "Fotos da Residência");
     var subfolderMedidor = criarOuObterPasta(inspectionFolder, "Fotos do Medidor");
     
-    // 2. Gravação IMEDIATA na Planilha de Vistorias na aba "Energia" (Garantida no início)
+    // 2. Gravação IMEDIATA na Planilha de Vistorias na aba "Energia" (Lock granular rápido ~0.3s)
     var mapaAbas = {
       "energia": "Energia",
       "agua": "Água",
@@ -983,14 +998,14 @@ function doPost(e) {
     };
     
     var nomeAba = mapaAbas[tipo] || "Energia";
-    var sheet = buscarAbaFlexivel(ss, nomeAba);
-    if (!sheet) {
-      sheet = ss.insertSheet(nomeAba);
-    }
-    
-    // Gravação 100% DINÂMICA na planilha e flush imediato
-    var linhaGravadaIndex = gravarLinhaVistoriaDinamica(sheet, data, nomeAutor, inspectionFolder.getUrl(), "");
-    SpreadsheetApp.flush();
+    var sheet = null;
+    var linhaGravadaIndex = executarComLockPlanilha(function() {
+      sheet = buscarAbaFlexivel(ss, nomeAba);
+      if (!sheet) {
+        sheet = ss.insertSheet(nomeAba);
+      }
+      return gravarLinhaVistoriaDinamica(sheet, data, nomeAutor, inspectionFolderUrl, "");
+    });
 
     // 3. Salva Fotografias em Base64 na pasta do Google Drive
     var urlsFotosImovel = [];
@@ -1230,34 +1245,39 @@ function doPost(e) {
             inspectionFolder.createFile(Utilities.newBlob(jsonResp.modeloAutoTex, "text/plain; charset=utf-8", "modelo_auto.tex"));
           }
 
-          // 5. Atualiza o Link do Laudo PDF na aba Energia
-          if (urlLaudoGerado && linhaGravadaIndex > 0) {
-            var headersVistoria = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
-            var colLaudoEnergia = acharIndiceColuna(headersVistoria, ["linkdolaudopdf", "laudopdf", "linklaudo", "laudo"]);
-            if (colLaudoEnergia >= 0) {
-              sheet.getRange(linhaGravadaIndex, colLaudoEnergia + 1).setValue(urlLaudoGerado);
+          // 5 & 6. Atualiza o Link do Laudo PDF na aba Energia e status na aba Processos Energia (Lock granular rápido ~0.2s)
+          executarComLockPlanilha(function() {
+            if (urlLaudoGerado && linhaGravadaIndex > 0 && sheet) {
+              var headersVistoria = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+              var colLaudoEnergia = acharIndiceColuna(headersVistoria, ["linkdolaudopdf", "laudopdf", "linklaudo", "laudo"]);
+              if (colLaudoEnergia >= 0) {
+                sheet.getRange(linhaGravadaIndex, colLaudoEnergia + 1).setValue(urlLaudoGerado);
+              }
             }
-          }
 
-          // 6. Atualiza status e link na aba Processos Energia se existir
-          if (sheetProcessosRef && linhaProcessoEncontrada > 0 && extraido) {
-            if (extraido.colunaStatus > 0) {
-              sheetProcessosRef.getRange(linhaProcessoEncontrada, extraido.colunaStatus).setValue("Laudo Oficial Gerado ✅");
+            if (sheetProcessosRef && linhaProcessoEncontrada > 0 && extraido) {
+              if (extraido.colunaStatus > 0) {
+                sheetProcessosRef.getRange(linhaProcessoEncontrada, extraido.colunaStatus).setValue("Laudo Oficial Gerado ✅");
+              }
+              if (extraido.colunaLink > 0 && urlLaudoGerado) {
+                sheetProcessosRef.getRange(linhaProcessoEncontrada, extraido.colunaLink).setValue(urlLaudoGerado);
+              }
             }
-            if (extraido.colunaLink > 0 && urlLaudoGerado) {
-              sheetProcessosRef.getRange(linhaProcessoEncontrada, extraido.colunaLink).setValue(urlLaudoGerado);
-            }
-          }
+          });
         }
       } catch (errLaudo) {
         console.warn("Aviso ao gerar laudo automático em 2 etapas:", errLaudo.toString());
       }
     }
+
+    try {
+      cache.put(cacheKey, "concluido", 600);
+    } catch (eCacheEnd) {}
     
     return ContentService.createTextOutput(JSON.stringify({
       status: "sucesso",
       message: "Vistoria gravada com sucesso para " + config.nome + "!",
-      folderUrl: inspectionFolder.getUrl(),
+      folderUrl: inspectionFolderUrl,
       laudoUrl: urlLaudoGerado || null,
       perito: config.nome
     })).setMimeType(ContentService.MimeType.JSON);
@@ -1267,10 +1287,6 @@ function doPost(e) {
       status: "erro",
       message: "Erro interno no script: " + error.toString()
     })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    try {
-      lock.releaseLock();
-    } catch (e) {}
   }
 }
 
