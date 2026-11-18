@@ -773,6 +773,138 @@ function doPost(e) {
     var mainFolderId = data.mainFolderId || config.mainFolderId;
     var ss = SpreadsheetApp.openById(spreadsheetId);
 
+    // 🗑️ AÇÃO DEDICADA: Excluir Foto do Google Drive (Mover para Lixeira)
+    if (data.action === "excluir_foto_drive" || data.action === "remover_foto_drive") {
+      try {
+        var removidos = 0;
+        var fileIdDel = String(data.fileId || data.driveId || "").trim();
+        if (fileIdDel) {
+          try {
+            var fileObj = DriveApp.getFileById(fileIdDel);
+            if (fileObj) {
+              fileObj.setTrashed(true);
+              removidos++;
+            }
+          } catch (eById) {
+            console.warn("Aviso ao excluir arquivo por ID " + fileIdDel + ": " + eById.toString());
+          }
+        }
+        var targetNameDel = String(data.fileName || data.name || "").trim().toLowerCase();
+        if (removidos === 0 && targetNameDel && (data.folderUrl || data.processo || data.numeroProcesso || data.nomeAutor)) {
+          var folderDel = localizarPastaVistoriaDrive(ss, config, data.folderUrl, data.processo || data.numeroProcesso, data.nomeAutor || data.autor, mainFolderId);
+          if (folderDel) {
+            var subF = folderDel.getFolders();
+            while (subF.hasNext()) {
+              var sFolder = subF.next();
+              var fIt = sFolder.getFiles();
+              while (fIt.hasNext()) {
+                var fItem = fIt.next();
+                if (String(fItem.getName() || "").trim().toLowerCase() === targetNameDel) {
+                  fItem.setTrashed(true);
+                  removidos++;
+                }
+              }
+            }
+            var rIt = folderDel.getFiles();
+            while (rIt.hasNext()) {
+              var rItem = rIt.next();
+              if (String(rItem.getName() || "").trim().toLowerCase() === targetNameDel) {
+                rItem.setTrashed(true);
+                removidos++;
+              }
+            }
+          }
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "sucesso",
+          removidos: removidos,
+          message: removidos > 0 ? "Foto removida do Google Drive com sucesso." : "Arquivo não encontrado ou já removido no Drive."
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errDelFoto) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Erro ao excluir foto no Drive: " + errDelFoto.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // 📅 AÇÃO DEDICADA: Salvar / Atualizar Pré-Vistoria na Aba "Processos Energia" (SEM chamar LaTeX)
+    if (data.action === "salvar_previstoria" || data.action === "criar_previstoria") {
+      try {
+        var resPre = executarComLockPlanilha(function() {
+          return salvarOuAtualizarPreVistoriaPlanilha(ss, data.processo || data);
+        });
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "sucesso",
+          linhaIndex: resPre.linhaIndex,
+          atualizado: resPre.atualizado,
+          numeroProcesso: resPre.numeroProcesso,
+          statusAutomacao: resPre.statusAutomacao,
+          message: resPre.atualizado ? "Pré-vistoria atualizada na planilha com sucesso!" : "Pré-vistoria agendada na planilha com sucesso!"
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errPre) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Erro ao salvar pré-vistoria: " + errPre.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // 🔄 AÇÃO DEDICADA: Atualizar Status (e Link do PDF) na Planilha
+    if (data.action === "atualizar_status_pericia" || data.action === "atualizar_status") {
+      try {
+        var resStatus = executarComLockPlanilha(function() {
+          return atualizarStatusPericiaPlanilha(ss, data);
+        });
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "sucesso",
+          atualizadoProcessos: resStatus.atualizadoProcessos,
+          atualizadoEnergia: resStatus.atualizadoEnergia,
+          novoStatus: data.novoStatus || data.status || "",
+          message: "Status atualizado com sucesso na planilha."
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errSt) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Erro ao atualizar status: " + errSt.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // 🗑️ AÇÃO DEDICADA: Excluir Perícia / Pré-Vistoria das Planilhas (e opcionalmente Pasta do Drive)
+    if (data.action === "excluir_pericia" || data.action === "deletar_pericia") {
+      try {
+        var resDel = executarComLockPlanilha(function() {
+          return excluirPericiaPlanilha(ss, config, data, mainFolderId);
+        });
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "sucesso",
+          removidasProcessos: resDel.removidasProcessos,
+          removidasEnergia: resDel.removidasEnergia,
+          pastaDriveLixeira: resDel.pastaDriveLixeira,
+          message: "Perícia excluída da planilha com sucesso."
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errDelPer) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Erro ao excluir perícia: " + errDelPer.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // ⚡ AÇÃO DEDICADA: Criar Laudo Completo pelo Hub (Pré-Vistoria + Pasta Drive + Automação LaTeX)
+    if (data.action === "criar_laudo_completo_hub") {
+      try {
+        var resHub = criarLaudoCompletoPeloHub(ss, config, data, mainFolderId);
+        return ContentService.createTextOutput(JSON.stringify(resHub)).setMimeType(ContentService.MimeType.JSON);
+      } catch (errHub) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "erro",
+          message: "Erro ao criar laudo completo via Hub: " + errHub.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     // 🚀 AÇÃO DEDICADA: Upload Direto de Foto de Fachada para a Pasta do Drive (Item 7)
     if (data.action === "upload_fachada" || data.action === "salvar_fachada") {
       try {
@@ -1187,16 +1319,22 @@ function doPost(e) {
 
         // --- ETAPA 2: Compilação do PDF Oficial com Tectonic XeTeX (~12 a 25s) ---
         // Prepara fotos ultraleves para compilação do PDF (apenas pdfBase64, removendo o base64 pesado de 1440px)
-        var photosImovelCompact = (data.photosImovel || []).map(function(p) {
+        var photosImovelCompact = (data.photosImovel || []).filter(function(p) {
+          return !ehFotoAmostraBloqueadaGas(p && p.name);
+        }).map(function(p) {
           return {
             name: p.name || "foto_imovel.jpg",
-            base64: p.pdfBase64 || p.base64 || ""
+            base64: p.pdfBase64 || p.base64 || "",
+            isFachada: Boolean(p.isFachada)
           };
         });
-        var photosMedidorCompact = (data.photosMedidor || []).map(function(p) {
+        var photosMedidorCompact = (data.photosMedidor || []).filter(function(p) {
+          return !ehFotoAmostraBloqueadaGas(p && p.name);
+        }).map(function(p) {
           return {
             name: p.name || "foto_medidor.jpg",
-            base64: p.pdfBase64 || p.base64 || ""
+            base64: p.pdfBase64 || p.base64 || "",
+            isToi: Boolean(p.isToi)
           };
         });
 
@@ -1856,7 +1994,7 @@ function localizarPastaVistoriaDrive(ss, config, folderUrl, processo, autor, mai
             var r = dataE[i];
             var rProc = r[2] ? String(r[2]).replace(/[^0-9]/g, "") : "";
             var rAut = r[1] ? String(r[1]).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "") : "";
-            if ((procLimpo && rProc && rProc === procLimpo) || (autorLimpo && rAut && (rAut.indexOf(autorLimpo) !== -1 || autorLimpo.indexOf(rAut) !== -1))) {
+            if ((procLimpo && rProc && rProc === procLimpo) || ((!procLimpo || !rProc) && autorLimpo && rAut && (rAut.indexOf(autorLimpo) !== -1 || autorLimpo.indexOf(rAut) !== -1))) {
               var lUrl = r[colLink];
               var fId = extrairFolderId(lUrl);
               if (fId) {
@@ -1920,6 +2058,19 @@ function localizarPastaVistoriaDrive(ss, config, folderUrl, processo, autor, mai
   return null;
 }
 
+function ehFotoAmostraBloqueadaGas(nome) {
+  if (!nome) return false;
+  var n = String(nome).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return (
+    n.indexOf("imovel_07_cozinha") !== -1 ||
+    n.indexOf("imovel_08_casa") !== -1 ||
+    n.indexOf("imovel_09_casa") !== -1 ||
+    n.indexOf("imovel_10_area") !== -1 ||
+    n.indexOf("fotosparateste") !== -1 ||
+    n.indexOf("geladeira_lava_loucas") !== -1
+  );
+}
+
 function extrairFotosDePastaDrive(targetFolder) {
   var result = { photosImovel: [], photosMedidor: [] };
   if (!targetFolder) return result;
@@ -1928,6 +2079,7 @@ function extrairFotosDePastaDrive(targetFolder) {
     try {
       var mime = (file.getMimeType() || "").toLowerCase();
       var name = file.getName();
+      if (ehFotoAmostraBloqueadaGas(name)) return;
       var isImg = mime.indexOf("image") !== -1 || mime.indexOf("octet-stream") !== -1 || name.match(/\.(jpe?g|png|webp|heic)$/i);
       if (!isImg) return;
 
@@ -2056,6 +2208,7 @@ function copiarFotosDaPastaOrigem(pastaOrigemUrl, targetSubfolderImovel, targetS
       var files = origSubRes.getFiles();
       while (files.hasNext()) {
         var file = files.next();
+        if (ehFotoAmostraBloqueadaGas(file.getName())) continue;
         var mime = file.getMimeType();
         if (mime.indexOf("image") !== -1 || mime.indexOf("jpeg") !== -1 || mime.indexOf("png") !== -1 || mime.indexOf("octet-stream") !== -1) {
           var copiedFile = file.makeCopy(file.getName(), targetSubfolderImovel);
@@ -2078,6 +2231,7 @@ function copiarFotosDaPastaOrigem(pastaOrigemUrl, targetSubfolderImovel, targetS
       var filesM = origSubMed.getFiles();
       while (filesM.hasNext()) {
         var fileM = filesM.next();
+        if (ehFotoAmostraBloqueadaGas(fileM.getName())) continue;
         var mimeM = fileM.getMimeType();
         if (mimeM.indexOf("image") !== -1 || mimeM.indexOf("jpeg") !== -1 || mimeM.indexOf("png") !== -1 || mimeM.indexOf("octet-stream") !== -1) {
           var copiedFileM = fileM.makeCopy(fileM.getName(), targetSubfolderMedidor);
@@ -2150,4 +2304,434 @@ function contarQuesitosEstimados(proc) {
     }
   }
   return total;
+}
+
+/**
+ * Garante a criação / atualização de uma linha de Pré-Vistoria na aba "Processos Energia".
+ */
+function salvarOuAtualizarPreVistoriaPlanilha(ss, p) {
+  var sheetProcessos = buscarAbaFlexivel(ss, "Processos Energia") || buscarAbaFlexivel(ss, "Processos") || buscarAbaFlexivel(ss, "Pré-Vistoria");
+  if (!sheetProcessos) {
+    sheetProcessos = ss.insertSheet("Processos Energia");
+    sheetProcessos.appendRow([
+      "Data da Vistoria", "Tipo de Ação (Consumo / TOI)", "Número do Processo (CNJ)", "Nome do Autor",
+      "Nome do Réu", "Vara / Comarca", "Número do Cliente / Instalação", "Número do TOI",
+      "Data Lavratura TOI", "Irregularidade Alegada (Gato/Desvio)", "Valor de Recuperação Cobrado R$",
+      "Endereço Completo da Perícia", "Objetivo da Perícia", "Resumo do Processo",
+      "Alegações do Autor", "Contestações do Réu", "Início Período Controvertido",
+      "Fim Período Controvertido", "Consumo Médio Regular (kWh)", "Consumo Médio Reclamado (kWh)",
+      "Data Início Histórico Faturas", "Data Fim Histórico Faturas", "Histórico Consumo CSV",
+      "Quesitos do Juízo", "Quesitos do Autor", "Quesitos do Réu", "Status da Automação"
+    ]);
+  }
+
+  var lastRow = sheetProcessos.getLastRow();
+  var lastCol = Math.max(sheetProcessos.getLastColumn(), 27);
+  var headers = lastRow > 0 ? sheetProcessos.getRange(1, 1, 1, lastCol).getDisplayValues()[0] : [];
+  if (headers.length === 0) {
+    return { linhaIndex: -1, atualizado: false, numeroProcesso: p.numeroProcesso || "", statusAutomacao: "Erro" };
+  }
+
+  var colData = acharIndiceColuna(headers, ["datadavistoria", "datavistoria", "dataagendada", "dataagendamento", "dataagenda", "agendamento", "data", "dia"]);
+  if (colData < 0) colData = 0;
+  var colTipo = acharIndiceColuna(headers, ["tipodeacaoconsumotoi", "tipodeacao", "tipoacao", "acao"]);
+  var colProc = acharIndiceColuna(headers, ["numerodoprocessocnj", "numerodoprocesso", "processo", "numprocesso", "cnj"]);
+  var colAutor = acharIndiceColuna(headers, ["nomedoautor", "autor", "parteautora"]);
+  var colReu = acharIndiceColuna(headers, ["nomedoreu", "reu", "concessionaria", "empresa"]);
+  var colVara = acharIndiceColuna(headers, ["varacomarca", "vara", "juizo", "comarca"]);
+  var colCliente = acharIndiceColuna(headers, ["numerodoclienteinstalacao", "numerodocliente", "cliente", "instalacao", "uc"]);
+  var colToi = acharIndiceColuna(headers, ["numerodotoi", "toi", "numtoi"]);
+  var colDataToi = acharIndiceColuna(headers, ["datalavraturatoi", "datalavratura"]);
+  var colIrreg = acharIndiceColuna(headers, ["irregularidadealegadagatodesvio", "irregularidadealegada", "irregularidade", "gato"]);
+  var colValRec = acharIndiceColuna(headers, ["valorderecuperacaocobrador", "valorrecuperacao", "valorrecuperado", "recuperacaoconsumo"]);
+  var colEnd = acharIndiceColuna(headers, ["enderecocompletodapericia", "enderecocompleto", "endereco", "local"]);
+  var colObj = acharIndiceColuna(headers, ["objetivodapericia", "objetivo", "escopo"]);
+  var colResumo = acharIndiceColuna(headers, ["resumodoprocesso", "resumo", "sintese"]);
+  var colAleg = acharIndiceColuna(headers, ["alegacoesdoautorformatadocom", "alegacoesdoautor", "alegacoesautor"]);
+  var colCont = acharIndiceColuna(headers, ["contestacoesdoreuformatadocom", "contestacoesdoreu", "contestacoesreu"]);
+  var colRedIni = acharIndiceColuna(headers, ["inicioperiodocontrovertidomesano", "inicioreducao", "reducaoinicio"]);
+  var colRedFim = acharIndiceColuna(headers, ["fimperiodocontrovertidomesano", "fimreducao", "reducaofim"]);
+  var colConsMedio = acharIndiceColuna(headers, ["consumomedioregularkwh", "consumomedio", "mediaregular"]);
+  var colConsRecl = acharIndiceColuna(headers, ["consumomedioreclamadokwh", "consumoreclamado", "mediareclamada"]);
+  var colHistIni = acharIndiceColuna(headers, ["datainiciohistoricofaturas", "iniciofaturas", "faturasinicio"]);
+  var colHistFim = acharIndiceColuna(headers, ["datafimhistoricofaturas", "fimfaturas", "faturasfim"]);
+  var colCsv = acharIndiceColuna(headers, ["historicoconsumocsv", "historicocsv", "faturascsv", "csvconsumo", "csv", "consumocsv"]);
+  var colQJuizo = acharIndiceColuna(headers, ["quesitosdojuizobrutos", "quesitosdojuizo", "quesitosjuizo", "pontoscontrovertidos"]);
+  var colQAutor = acharIndiceColuna(headers, ["quesitosdoautorbrutos", "quesitosdoautor", "quesitosautor"]);
+  var colQReu = acharIndiceColuna(headers, ["quesitosdoreubrutos", "quesitosdoreu", "quesitosreu"]);
+  var colStatus = acharIndiceColuna(headers, ["statusdaautomacao", "status", "situacao"]);
+  var colLink = acharIndiceColuna(headers, ["linkdolaudopdf", "laudopdf", "linklaudo"]);
+
+  var numProc = String(p.numeroProcesso || "").trim();
+  var numDig = numProc.replace(/[^0-9]/g, "");
+  var targetRowIdx = -1;
+  if (numDig && colProc >= 0 && lastRow > 1) {
+    var procColValues = sheetProcessos.getRange(2, colProc + 1, lastRow - 1, 1).getDisplayValues();
+    for (var i = 0; i < procColValues.length; i++) {
+      var rDig = String(procColValues[i][0] || "").replace(/[^0-9]/g, "");
+      if (rDig && rDig === numDig) {
+        targetRowIdx = i + 2;
+        break;
+      }
+    }
+  }
+
+  var eraExistente = targetRowIdx > 0;
+  var rowValues = [];
+  if (eraExistente) {
+    rowValues = sheetProcessos.getRange(targetRowIdx, 1, 1, headers.length).getDisplayValues()[0].slice();
+  } else {
+    for (var c = 0; c < headers.length; c++) rowValues.push("");
+  }
+
+  var setCol = function(colIdx, val) {
+    if (colIdx >= 0 && val !== undefined && val !== null) {
+      while (rowValues.length <= colIdx) rowValues.push("");
+      rowValues[colIdx] = String(val);
+    }
+  };
+
+  setCol(colData, p.dataVistoria || p.data_vistoria || "");
+  setCol(colTipo, p.tipoAcao || p.tipo_acao || "Consumo");
+  setCol(colProc, numProc);
+  setCol(colAutor, p.nomeAutor || p.autor || "");
+  setCol(colReu, p.nomeReu || p.reuConcessionaria || p.reu || "");
+  setCol(colVara, p.varaJuizo || p.varaComarca || "");
+  setCol(colCliente, p.numeroCliente || p.unidadeConsumidora || "");
+  setCol(colToi, p.numeroToi || "");
+  setCol(colDataToi, p.dataLavraturaToi || "");
+  setCol(colIrreg, p.irregularidadeAlegada || "");
+  setCol(colValRec, p.valorRecuperacao || "");
+  setCol(colEnd, p.enderecoPericia || p.enderecoCompleto || "");
+  setCol(colObj, p.objetivoPericia || p.objetoPericia || "");
+  setCol(colResumo, p.resumoProcesso || p.sinteseProcesso || "");
+  setCol(colAleg, p.alegacoesAutor || "");
+  setCol(colCont, p.contestacoesReu || "");
+
+  var redIni = p.inicioPeriodoControvertido || ((p.reducaoMesInicio && p.reducaoAnoInicio) ? (p.reducaoMesInicio + "/" + p.reducaoAnoInicio) : "");
+  var redFim = p.fimPeriodoControvertido || ((p.reducaoMesFim && p.reducaoAnoFim) ? (p.reducaoMesFim + "/" + p.reducaoAnoFim) : "");
+  if (redIni) setCol(colRedIni, redIni);
+  if (redFim) setCol(colRedFim, redFim);
+
+  setCol(colConsMedio, p.consumoMedio || "");
+  setCol(colConsRecl, p.consumoMedioReclamado || "");
+  setCol(colHistIni, p.historicoConsumoInicio || "");
+  setCol(colHistFim, p.historicoConsumoFim || "");
+  setCol(colCsv, p.historicoConsumoCsv || p.historicoCsv || "");
+  setCol(colQJuizo, p.quesitosJuizo || p.quesitosJuizoBruto || "");
+  setCol(colQAutor, p.quesitosAutor || p.quesitosAutorBruto || "");
+  setCol(colQReu, p.quesitosReu || p.quesitosReuBruto || "");
+
+  var statusFinal = String(p.statusAutomacao || p.status || "Pronto para Vistoria").trim();
+  setCol(colStatus, statusFinal);
+  if (p.laudoPdfUrl || p.linkLaudoPdf) setCol(colLink, p.laudoPdfUrl || p.linkLaudoPdf);
+
+  if (eraExistente) {
+    sheetProcessos.getRange(targetRowIdx, 1, 1, rowValues.length).setValues([rowValues]);
+  } else {
+    sheetProcessos.appendRow(rowValues);
+    targetRowIdx = sheetProcessos.getLastRow();
+  }
+
+  return {
+    linhaIndex: targetRowIdx,
+    atualizado: eraExistente,
+    numeroProcesso: numProc,
+    statusAutomacao: statusFinal
+  };
+}
+
+/**
+ * Atualiza o status (e opcionalmente o link do PDF) nas abas "Processos Energia" e "Energia".
+ */
+function atualizarStatusPericiaPlanilha(ss, payload) {
+  var numProc = String(payload.numeroProcesso || payload.processo || "").trim();
+  var numDig = numProc.replace(/[^0-9]/g, "");
+  var autorLimpo = String(payload.nomeAutor || payload.autor || "").toLowerCase().trim();
+  var novoStatus = String(payload.novoStatus || payload.status || "").trim();
+  var linkPdf = String(payload.linkLaudoPdf || payload.laudoPdfUrl || "").trim();
+
+  var atualizadoProcessos = false;
+  var atualizadoEnergia = false;
+
+  var sheetProc = buscarAbaFlexivel(ss, "Processos Energia") || buscarAbaFlexivel(ss, "Processos");
+  if (sheetProc) {
+    var dP = sheetProc.getDataRange().getDisplayValues();
+    if (dP.length > 1) {
+      var hP = dP[0];
+      var colProcP = acharIndiceColuna(hP, ["numerodoprocessocnj", "numerodoprocesso", "processo", "cnj"]);
+      var colAutP = acharIndiceColuna(hP, ["nomedoautor", "autor", "parteautora"]);
+      var colStP = acharIndiceColuna(hP, ["statusdaautomacao", "status", "situacao"]);
+      var colLkP = acharIndiceColuna(hP, ["linkdolaudopdf", "laudopdf", "linklaudo"]);
+      for (var i = 1; i < dP.length; i++) {
+        var rpDig = colProcP >= 0 ? String(dP[i][colProcP] || "").replace(/[^0-9]/g, "") : "";
+        var rpAut = colAutP >= 0 ? String(dP[i][colAutP] || "").toLowerCase().trim() : "";
+        var matchP = (numDig && rpDig && rpDig === numDig) || ((!numDig || !rpDig) && autorLimpo && rpAut && rpAut === autorLimpo);
+        if (matchP) {
+          if (colStP >= 0 && novoStatus) sheetProc.getRange(i + 1, colStP + 1).setValue(novoStatus);
+          if (colLkP >= 0 && linkPdf) sheetProc.getRange(i + 1, colLkP + 1).setValue(linkPdf);
+          atualizadoProcessos = true;
+        }
+      }
+    }
+  }
+
+  var sheetEnergia = buscarAbaFlexivel(ss, "Energia") || buscarAbaFlexivel(ss, "Respostas ao formulário 1");
+  if (sheetEnergia) {
+    var dE = sheetEnergia.getDataRange().getDisplayValues();
+    if (dE.length > 1) {
+      var hE = dE[0];
+      var colProcE = acharIndiceColuna(hE, ["numerodoprocesso", "processo", "cnj"]);
+      if (colProcE < 0) colProcE = 2;
+      var colAutE = acharIndiceColuna(hE, ["nomedoautor", "autor", "parteautora"]);
+      if (colAutE < 0) colAutE = 1;
+      var colStE = acharIndiceColuna(hE, ["status", "situacao", "statusdaautomacao"]);
+      var colLkE = acharIndiceColuna(hE, ["linkdolaudopdf", "laudopdf", "linklaudo"]);
+      for (var j = 1; j < dE.length; j++) {
+        var reDig = colProcE >= 0 ? String(dE[j][colProcE] || "").replace(/[^0-9]/g, "") : "";
+        var reAut = colAutE >= 0 ? String(dE[j][colAutE] || "").toLowerCase().trim() : "";
+        var matchE = (numDig && reDig && reDig === numDig) || ((!numDig || !reDig) && autorLimpo && reAut && reAut === autorLimpo);
+        if (matchE) {
+          if (colStE >= 0 && novoStatus) sheetEnergia.getRange(j + 1, colStE + 1).setValue(novoStatus);
+          if (colLkE >= 0 && linkPdf) sheetEnergia.getRange(j + 1, colLkE + 1).setValue(linkPdf);
+          atualizadoEnergia = true;
+        }
+      }
+    }
+  }
+
+  return { atualizadoProcessos: atualizadoProcessos, atualizadoEnergia: atualizadoEnergia };
+}
+
+/**
+ * Fluxo Completo pelo Hub: salva Pré-Vistoria na planilha, cria pasta no Drive,
+ * chama IA + Automação-LaTeX e devolve o Laudo pronto para o Editor.
+ */
+function criarLaudoCompletoPeloHub(ss, config, payload, mainFolderId) {
+  var proc = payload.processo || payload;
+  var vist = payload.vistoria || {};
+
+  // 1. Salva / Atualiza linha em Processos Energia
+  proc.statusAutomacao = proc.statusAutomacao || "Em Revisão";
+  executarComLockPlanilha(function() {
+    return salvarOuAtualizarPreVistoriaPlanilha(ss, proc);
+  });
+
+  // 2. Cria ou localiza pasta oficial da perícia no Drive
+  var targetMainFolderId = mainFolderId || (config && config.mainFolderId) || "1dIFg4HCfX0C3cG_8WrbFK5PHETt6VUQV";
+  var mainFolder = DriveApp.getFolderById(targetMainFolderId);
+  var autorCap = capitalizarNome(proc.nomeAutor || "Autor Nao Identificado");
+  var dataFmt = String(proc.dataVistoria || "").replace(/[\/]/g, "-");
+  var pastaNome = (dataFmt ? (dataFmt + " - ") : "") + autorCap;
+
+  var targetFolder = localizarPastaVistoriaDrive(ss, config, payload.folderUrl, proc.numeroProcesso, autorCap, targetMainFolderId);
+  if (!targetFolder) {
+    targetFolder = criarPastaVistoriaComVersionamento(mainFolder, pastaNome);
+  }
+  criarOuObterPasta(targetFolder, "Fotos da Residência");
+  criarOuObterPasta(targetFolder, "Fotos do Medidor");
+
+  var dadosProcesso = {
+    numeroProcesso: proc.numeroProcesso || "",
+    nomeAutor: autorCap,
+    nomeReu: proc.nomeReu || "",
+    varaJuizo: proc.varaJuizo || "",
+    tipoAcao: proc.tipoAcao || "Consumo",
+    numeroCliente: proc.numeroCliente || "",
+    numeroToi: proc.numeroToi || "",
+    dataLavraturaToi: proc.dataLavraturaToi || "",
+    irregularidadeAlegada: proc.irregularidadeAlegada || "",
+    valorRecuperacao: proc.valorRecuperacao || "",
+    enderecoPericia: proc.enderecoPericia || "",
+    objetivoPericia: proc.objetivoPericia || "",
+    resumoProcesso: proc.resumoProcesso || "",
+    alegacoesAutor: proc.alegacoesAutor || "",
+    contestacoesReu: proc.contestacoesReu || "",
+    consumoMedio: proc.consumoMedio || "199",
+    consumoMedioReclamado: proc.consumoMedioReclamado || proc.consumoMedio || "199",
+    historicoConsumoCsv: proc.historicoConsumoCsv || "",
+    quesitosJuizo: proc.quesitosJuizo || "",
+    quesitosAutor: proc.quesitosAutor || "",
+    quesitosReu: proc.quesitosReu || "",
+    quesitosJuizoConsolidados: proc.quesitosJuizoConsolidados !== false
+  };
+
+  var respostasQuesitos = { quesitosDoJuizo: "", quesitosDoAutor: "", quesitosDoReu: "", resumoJuizoParagrafo: "" };
+  try {
+    var respQ = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/responder-quesitos", {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify({ processo: dadosProcesso, vistoria: vist, parte: "tudo" }),
+      muteHttpExceptions: true
+    });
+    if (respQ.getResponseCode() === 200) {
+      var parsedQ = JSON.parse(respQ.getContentText());
+      if (parsedQ && parsedQ.respostas) respostasQuesitos = parsedQ.respostas;
+    }
+  } catch (eQ) {
+    console.warn("Aviso responder-quesitos Hub:", eQ.toString());
+  }
+
+  var payloadCompilacao = {
+    perito: {
+      nome: config.nome,
+      tituloLinhaA: config.tituloLinhaA,
+      tituloLinhaB: config.tituloLinhaB,
+      registroRotulo: config.registroRotulo,
+      registroNumero: config.registroNumero,
+      telefone: config.telefone,
+      email: config.email
+    },
+    tipoAcao: dadosProcesso.tipoAcao,
+    numeroProcesso: dadosProcesso.numeroProcesso,
+    varaJuizo: dadosProcesso.varaJuizo,
+    nomeAutor: autorCap,
+    nomeReu: dadosProcesso.nomeReu,
+    numeroCliente: dadosProcesso.numeroCliente,
+    numeroToi: dadosProcesso.numeroToi,
+    enderecoPericia: dadosProcesso.enderecoPericia,
+    objetivoPericia: dadosProcesso.objetivoPericia,
+    resumoProcesso: dadosProcesso.resumoProcesso,
+    alegacoesAutor: dadosProcesso.alegacoesAutor,
+    contestacoesReu: dadosProcesso.contestacoesReu,
+    consumoMedio: dadosProcesso.consumoMedio,
+    consumoMedioReclamado: dadosProcesso.consumoMedioReclamado,
+    historicoConsumoCsv: dadosProcesso.historicoConsumoCsv,
+    dataVistoria: proc.dataVistoria || "",
+    numeroMedidor: vist.numeroMedidor || "",
+    leituraMedidor: vist.leituraMedidor || "",
+    situacaoLacre: vist.situacaoLacre || "",
+    estadoGeralMedidor: vist.estadoGeralMedidor || "",
+    quesitosDoJuizo: respostasQuesitos.quesitosDoJuizo || dadosProcesso.quesitosJuizo || "",
+    quesitosDoAutor: respostasQuesitos.quesitosDoAutor || dadosProcesso.quesitosAutor || "",
+    quesitosDoReu: respostasQuesitos.quesitosDoReu || dadosProcesso.quesitosReu || "",
+    quesitosJuizoConsolidados: dadosProcesso.quesitosJuizoConsolidados,
+    returnBase64: true
+  };
+
+  var pdfBase64 = "";
+  var dadosTex = "";
+  var historicoCsv = "";
+  var laudoPdfUrl = "";
+
+  try {
+    var respComp = UrlFetchApp.fetch(MICROSERVICE_LATEX_BASE_URL + "/api/compilar-laudo?format=base64", {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payloadCompilacao),
+      muteHttpExceptions: true
+    });
+    if (respComp.getResponseCode() === 200) {
+      var jsonComp = JSON.parse(respComp.getContentText());
+      if (jsonComp && jsonComp.status === "sucesso") {
+        pdfBase64 = jsonComp.pdfBase64 || "";
+        dadosTex = jsonComp.dadosTex || "";
+        historicoCsv = jsonComp.historicoCsv || "";
+        if (pdfBase64) {
+          var pdfBlob = Utilities.newBlob(Utilities.base64Decode(pdfBase64), "application/pdf", jsonComp.filename || ("Laudo_" + autorCap.replace(/\s+/g, "_") + ".pdf"));
+          var savedPdf = targetFolder.createFile(pdfBlob);
+          try { savedPdf.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (_) {}
+          laudoPdfUrl = savedPdf.getUrl();
+        }
+        if (dadosTex) {
+          targetFolder.createFile(Utilities.newBlob(dadosTex, "text/plain", "dados.tex"));
+        }
+        if (historicoCsv) {
+          targetFolder.createFile(Utilities.newBlob(historicoCsv, "text/csv", "historico_consumo.csv"));
+        }
+      }
+    }
+  } catch (eComp) {
+    console.warn("Aviso compilar-laudo Hub:", eComp.toString());
+  }
+
+  if (laudoPdfUrl) {
+    executarComLockPlanilha(function() {
+      return atualizarStatusPericiaPlanilha(ss, {
+        numeroProcesso: dadosProcesso.numeroProcesso,
+        nomeAutor: autorCap,
+        novoStatus: "Em Revisão",
+        linkLaudoPdf: laudoPdfUrl
+      });
+    });
+  }
+
+  return {
+    status: "sucesso",
+    folderUrl: targetFolder.getUrl(),
+    laudoPdfUrl: laudoPdfUrl,
+    dadosTex: dadosTex,
+    historicoCsv: historicoCsv,
+    respostasQuesitos: respostasQuesitos,
+    message: laudoPdfUrl ? "Laudo gerado e compilado com sucesso!" : "Pré-vistoria salva e quesitos preparados."
+  };
+}
+
+/**
+ * Exclui linhas correspondentes nas abas "Processos Energia" e "Energia"
+ * (e opcionalmente envia a pasta do Google Drive para a lixeira).
+ */
+function excluirPericiaPlanilha(ss, config, payload, mainFolderId) {
+  var numProc = String(payload.numeroProcesso || payload.processo || "").trim();
+  var numDig = numProc.replace(/[^0-9]/g, "");
+  var autorLimpo = String(payload.nomeAutor || payload.autor || "").toLowerCase().trim();
+  var excluirPastaDrive = payload.excluirPastaDrive === true;
+
+  var removidasProcessos = 0;
+  var removidasEnergia = 0;
+  var pastaDriveLixeira = false;
+
+  if (excluirPastaDrive && (payload.folderUrl || numProc || autorLimpo)) {
+    try {
+      var pastaAlvo = localizarPastaVistoriaDrive(ss, config, payload.folderUrl, numProc, payload.nomeAutor || payload.autor, mainFolderId);
+      if (pastaAlvo) {
+        pastaAlvo.setTrashed(true);
+        pastaDriveLixeira = true;
+      }
+    } catch (ePasta) {
+      console.warn("Aviso ao enviar pasta do Drive para lixeira:", ePasta.toString());
+    }
+  }
+
+  var sheetProc = buscarAbaFlexivel(ss, "Processos Energia") || buscarAbaFlexivel(ss, "Processos") || buscarAbaFlexivel(ss, "Pré-Vistoria");
+  if (sheetProc && sheetProc.getLastRow() > 1) {
+    var dP = sheetProc.getDataRange().getDisplayValues();
+    var hP = dP[0];
+    var colProcP = acharIndiceColuna(hP, ["numerodoprocessocnj", "numerodoprocesso", "processo", "cnj"]);
+    var colAutP = acharIndiceColuna(hP, ["nomedoautor", "autor", "parteautora"]);
+    for (var i = dP.length - 1; i >= 1; i--) {
+      var rpDig = colProcP >= 0 ? String(dP[i][colProcP] || "").replace(/[^0-9]/g, "") : "";
+      var rpAut = colAutP >= 0 ? String(dP[i][colAutP] || "").toLowerCase().trim() : "";
+      var matchP = (numDig && rpDig && rpDig === numDig) || ((!numDig || !rpDig) && autorLimpo && rpAut && rpAut === autorLimpo);
+      if (matchP) {
+        sheetProc.deleteRow(i + 1);
+        removidasProcessos++;
+      }
+    }
+  }
+
+  var sheetEnergia = buscarAbaFlexivel(ss, "Energia") || buscarAbaFlexivel(ss, "Respostas ao formulário 1");
+  if (sheetEnergia && sheetEnergia.getLastRow() > 1) {
+    var dE = sheetEnergia.getDataRange().getDisplayValues();
+    var hE = dE[0];
+    var colProcE = acharIndiceColuna(hE, ["numerodoprocesso", "processo", "cnj"]);
+    if (colProcE < 0) colProcE = 2;
+    var colAutE = acharIndiceColuna(hE, ["nomedoautor", "autor", "parteautora"]);
+    if (colAutE < 0) colAutE = 1;
+    for (var j = dE.length - 1; j >= 1; j--) {
+      var reDig = colProcE >= 0 ? String(dE[j][colProcE] || "").replace(/[^0-9]/g, "") : "";
+      var reAut = colAutE >= 0 ? String(dE[j][colAutE] || "").toLowerCase().trim() : "";
+      var matchE = (numDig && reDig && reDig === numDig) || ((!numDig || !reDig) && autorLimpo && reAut && reAut === autorLimpo);
+      if (matchE) {
+        sheetEnergia.deleteRow(j + 1);
+        removidasEnergia++;
+      }
+    }
+  }
+
+  return {
+    removidasProcessos: removidasProcessos,
+    removidasEnergia: removidasEnergia,
+    pastaDriveLixeira: pastaDriveLixeira
+  };
 }
